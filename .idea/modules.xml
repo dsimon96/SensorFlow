@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/ExecutionManager/ExecutionManager.iml" filepath="$PROJECT_DIR$/ExecutionManager/ExecutionManager.iml" />
+      <module fileurl="file://$PROJECT_DIR$/SensorFlow.iml" filepath="$PROJECT_DIR$/SensorFlow.iml" />
+    </modules>
+  </component>
+</project>
