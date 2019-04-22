@@ -2,8 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/ExecutionManager/ExecutionManager.iml" filepath="$PROJECT_DIR$/ExecutionManager/ExecutionManager.iml" />
-      <module fileurl="file://$PROJECT_DIR$/SensorFlow.iml" filepath="$PROJECT_DIR$/SensorFlow.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/SensorFlow.iml" filepath="$PROJECT_DIR$/.idea/SensorFlow.iml" />
+      <module fileurl="file://$PROJECT_DIR$/untitled104.iml" filepath="$PROJECT_DIR$/untitled104.iml" />
     </modules>
   </component>
 </project>
