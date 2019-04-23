@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "org.apache.storm.starter";
+option java_outer_classname = "SensorFlowProto";
+
+package sensorflow;
+
+service SensorFlowCloud {
+    // register an edge
+    rpc SubmitJob (Empty) returns (JobToken) {};
+    rpc GetJobStatus (JobToken) returns (StatusReply) {};
+    rpc DeleteJob (JobToken) returns (DeletionReply) {};
+    rpc SetJobSchedule (JobSchedule) returns (ScheduleReply) {};
+}
+
+message Empty {}
+
+message JobToken {
+    string token = 1;
+}
+
+message StatusReply {
+    enum Status {
+        DoesNotExist = 0;
+        Creating = 1;
+        Running = 2;
+        Done = 3;
+        Failed = 4;
+    }
+    Status status = 1;
+}
+
+message DeletionReply {
+    bool success = 1;
+}
+
+message JobSchedule {
+    string token = 1;
+    map<string, bool> schedule = 2;
+}
+
+message ScheduleReply {
+    bool success = 1;
+}

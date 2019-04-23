@@ -15,7 +15,7 @@ public class SensorFlowMain {
     private static final Option HOST_OPT = Option.builder("host")
             .hasArg(true)
             .type(String.class)
-            .desc("If in edge mode, hostname for the cloud")
+            .desc("Hostname for the other paired device")
             .build();
     private static final Option PORT_OPT = Option.builder("port")
             .hasArg(true)
@@ -34,8 +34,8 @@ public class SensorFlowMain {
         CommandLineParser parser = new DefaultParser();
 
         boolean isServer;
-        String host = new String("");
-        Integer port = 15712;
+        String host;
+        int port = 15712;
         try {
             CommandLine cmd = parser.parse(CLI_OPTIONS, args);
             if (!validateArgs(cmd)) {
@@ -47,16 +47,15 @@ public class SensorFlowMain {
             isServer = cmd.hasOption("cloud");
             if (isServer && cmd.hasOption("port")) {
                 port = ((Number)cmd.getParsedOptionValue("port")).intValue();
-            } else if (!isServer){
-                host = (String)cmd.getParsedOptionValue("host");
             }
+            host = (String)cmd.getParsedOptionValue("host");
         } catch (ParseException e) {
             System.out.println("Failed to parse command line args!");
             return;
         }
 
         if (isServer) {
-            System.out.printf("Listening on port %d\n", port);
+            System.out.printf("Listening on port %d for connection from %s\n", port, host);
         } else {
             System.out.printf("Connecting to host %s\n", host);
         }
@@ -70,8 +69,8 @@ public class SensorFlowMain {
 
         if (cmd.hasOption("port") && !cmd.hasOption("port"))
 
-        if (cmd.hasOption("edge") && !cmd.hasOption("hostname")) {
-            System.out.println("Error: Please specify the hostname for the cloud server.");
+        if (cmd.hasOption("hostname")) {
+            System.out.println("Error: Please specify the hostname for the paired device.");
             return false;
         }
 
