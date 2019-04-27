@@ -21,9 +21,11 @@ import io.latent.storm.rabbitmq.RabbitMQSpout;
 import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
 import org.apache.storm.StormSubmitter;
+import org.apache.storm.spout.Scheme;
 import org.apache.storm.task.OutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.testing.TestWordSpout;
+import org.apache.storm.topology.IRichSpout;
 import org.apache.storm.topology.OutputFieldsDeclarer;
 import org.apache.storm.topology.TopologyBuilder;
 import org.apache.storm.topology.base.BaseRichBolt;
@@ -63,6 +65,9 @@ public class ExclamationTopology {
 
   public static void main(String[] args) throws Exception {
     TopologyBuilder builder = new TopologyBuilder();
+
+    Scheme scheme = new OurCustomMessageScheme();
+    IRichSpout spout = new RabbitMQSpout(scheme);
 
     builder.setSpout("word", new TestWordSpout(), 10);
     builder.setBolt("exclaim1", new ExclamationBolt(), 3).shuffleGrouping("word");
