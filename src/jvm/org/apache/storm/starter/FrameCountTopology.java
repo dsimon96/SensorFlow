@@ -1,10 +1,8 @@
 package org.apache.storm.starter;
 
 import com.rabbitmq.client.ConnectionFactory;
-import io.latent.storm.rabbitmq.RabbitMQSpout;
-import io.latent.storm.rabbitmq.config.ConnectionConfig;
-import io.latent.storm.rabbitmq.config.ConsumerConfig;
-import io.latent.storm.rabbitmq.config.ConsumerConfigBuilder;
+import io.latent.storm.rabbitmq.*;
+import io.latent.storm.rabbitmq.config.*;
 import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
 import org.apache.storm.StormSubmitter;
@@ -24,6 +22,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class FrameCountTopology {
+
+    public static String rabbitmqExchange = "sf.topic";
+    public static String rabbitmqRoutingKey = "cloud.info";
 
     public static class FrameCountBolt extends BaseRichBolt {
         OutputCollector _collector;
@@ -60,10 +61,12 @@ public class FrameCountTopology {
     public static void main(String[] args) throws Exception {
         TopologyBuilder builder = new TopologyBuilder();
 
+        // RabbitMQ as Spout
         Scheme scheme = new OurCustomMessageScheme();
-        IRichSpout spout = new RabbitMQSpout(scheme);
+        Declarator declarator = new OurCustomStormDeclarator(rabbitmqExchange, "your.rabbitmq.queue", rabbitmqRoutingKey);
+        IRichSpout spout = new RabbitMQSpout(scheme, declarator);
 
-        ConnectionConfig connectionConfig = new ConnectionConfig("localhost", 15712, "guest", "guest", ConnectionFactory.DEFAULT_VHOST, 10); // host, port, username, password, virtualHost, heartBeat
+        ConnectionConfig connectionConfig = new ConnectionConfig("localhost", 5672, "guest", "guest", ConnectionFactory.DEFAULT_VHOST, 10); // host, port, username, password, virtualHost, heartBeat
         ConsumerConfig spoutConfig = new ConsumerConfigBuilder().connection(connectionConfig)
                 .queue("your.rabbitmq.queue")
                 .prefetch(200)
@@ -73,11 +76,35 @@ public class FrameCountTopology {
         builder.setSpout("rabbit1", spout, 1)
             .addConfigurations(spoutConfig.asMap())
             .setMaxSpoutPending(200);
+        // Put frame logic code into FrameCountBolt.
         builder.setBolt("frame1", new FrameCountBolt(), 1).shuffleGrouping("rabbit1");
         builder.setBolt("frame2", new FrameCountBolt(), 1).shuffleGrouping("frame1");
 
         Config conf = new Config();
         conf.setDebug(true);
+
+        /* RabbitMQ as Sink */
+        /*
+        TupleToMessage sinkScheme = new TupleToMessageNonDynamic() {
+          @Override
+          byte[] extractBody(Tuple input) { return input.getStringByField("my-message-body").getBytes(); }
+        };
+
+        ConnectionConfig sinkConnectionConfig = new ConnectionConfig("localhost", 5672, "guest", "guest", ConnectionFactory.DEFAULT_VHOST, 10); // host, port, username, password, virtualHost, heartBeat
+        ProducerConfig sinkConfig = new ProducerConfigBuilder()
+                .connection(sinkConnectionConfig)
+                .contentEncoding("UTF-8")
+                .contentType("application/json")
+                .exchange("exchange-to-publish-to")
+                .routingKey("")
+                .build();
+
+        builder.setBolt("rabbitmq-sink", new RabbitMQBolt(sinkScheme))
+                .addConfigurations(sinkConfig)
+                .shuffleGrouping("frame2");
+        */
+        /* End RabbitMQ as Sink */
+
 
         if (args != null && args.length > 0) {
             conf.setNumWorkers(3);
