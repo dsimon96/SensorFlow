@@ -2,9 +2,7 @@ package org.apache.storm.starter;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import org.apache.storm.starter.proto.JobToken;
-import org.apache.storm.starter.proto.SensorFlowCloudGrpc;
-import org.apache.storm.starter.proto.StatusReply;
+import org.apache.storm.starter.proto.*;
 
 import java.util.concurrent.TimeUnit;
 
@@ -28,8 +26,26 @@ class SensorFlowClient {
     }
 
     void start() {
-        StatusReply reply = stub.getJobStatus(JobToken.newBuilder().build());
+        StatusReply reply = stub.getJobStatus(JobToken.newBuilder().setToken("").build());
         StatusReply.Status status = StatusReply.Status.forNumber(reply.getStatusValue());
+        System.out.println(status.getValueDescriptor());
+
+        String token = stub.submitJob(Empty.newBuilder().build()).getToken();
+        System.out.println("Got job token ".concat(token));
+
+        reply = stub.getJobStatus(JobToken.newBuilder().setToken(token).build());
+        status = StatusReply.Status.forNumber(reply.getStatusValue());
+        System.out.println(status.getValueDescriptor());
+
+        DeletionReply reply1 = stub.deleteJob(JobToken.newBuilder().setToken(token).build());
+        if (reply1.getSuccess()) {
+            System.out.println("Deleted job");
+        } else {
+            System.out.println("Failed to delete job");
+        }
+
+        reply = stub.getJobStatus(JobToken.newBuilder().setToken(token).build());
+        status = StatusReply.Status.forNumber(reply.getStatusValue());
         System.out.println(status.getValueDescriptor());
     }
 
