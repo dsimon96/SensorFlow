@@ -1,6 +1,5 @@
 package org.apache.storm.starter;
 
-import com.rabbitmq.client.ConnectionFactory;
 import io.latent.storm.rabbitmq.*;
 import io.latent.storm.rabbitmq.config.*;
 import org.apache.storm.Config;
@@ -18,13 +17,21 @@ import org.apache.storm.tuple.Tuple;
 import org.apache.storm.tuple.Values;
 import org.apache.storm.utils.Utils;
 
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
 public class FrameCountTopology {
 
-    public static String rabbitmqExchange = "sf.topic";
-    public static String rabbitmqRoutingKey = "cloud.info";
+    private static String rabbitmqExchange = "sf.topic";
+    private static String rabbitmqSpoutRoutingKey = "edge.info";
+    private static String rabbitmqSinkRoutingKey = "cloud.info";
+    private static String rabbitmqHost = "localhost";
+    private static int rabbitmqPort = 5672;
+    private static String rabbitmqUsername = "sf-admin";
+    private static String rabbitmqPassword = "buzzword";
+    private static String rabbitmqEdgeVhost = "edge";
+    private static String rabbitmqCloudVhost = "cloud";
 
     public static class FrameCountBolt extends BaseRichBolt {
         OutputCollector _collector;
@@ -54,8 +61,16 @@ public class FrameCountTopology {
 
         @Override
         public void declareOutputFields(OutputFieldsDeclarer declarer) {
-            declarer.declare(new Fields("word")); // Declares the output fields for the component
+            declarer.declare(new Fields("word", "count")); // Declares the output fields for the component
         }
+    }
+
+    // From int to byte array converter from
+    // https://stackoverflow.com/questions/1936857/convert-integer-into-byte-array-java
+    private static byte[] intToBytes( final int i ) {
+        ByteBuffer bb = ByteBuffer.allocate(4);
+        bb.putInt(i);
+        return bb.array();
     }
 
     public static void main(String[] args) throws Exception {
@@ -63,12 +78,12 @@ public class FrameCountTopology {
 
         // RabbitMQ as Spout
         Scheme scheme = new OurCustomMessageScheme();
-        Declarator declarator = new OurCustomStormDeclarator(rabbitmqExchange, "your.rabbitmq.queue", rabbitmqRoutingKey);
+        Declarator declarator = new OurCustomStormDeclarator(rabbitmqExchange, "", rabbitmqSpoutRoutingKey);
         IRichSpout spout = new RabbitMQSpout(scheme, declarator);
 
-        ConnectionConfig connectionConfig = new ConnectionConfig("localhost", 5672, "guest", "guest", ConnectionFactory.DEFAULT_VHOST, 10); // host, port, username, password, virtualHost, heartBeat
+        ConnectionConfig connectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqPort, rabbitmqUsername, rabbitmqPassword, rabbitmqEdgeVhost, 10);
         ConsumerConfig spoutConfig = new ConsumerConfigBuilder().connection(connectionConfig)
-                .queue("your.rabbitmq.queue")
+                .queue("") // No queue name
                 .prefetch(200)
                 .requeueOnFail()
                 .build();
@@ -76,34 +91,64 @@ public class FrameCountTopology {
         builder.setSpout("rabbit1", spout, 1)
             .addConfigurations(spoutConfig.asMap())
             .setMaxSpoutPending(200);
+
         // Put frame logic code into FrameCountBolt.
         builder.setBolt("frame1", new FrameCountBolt(), 1).shuffleGrouping("rabbit1");
-        builder.setBolt("frame2", new FrameCountBolt(), 1).shuffleGrouping("frame1");
+        //builder.setBolt("frame2", new FrameCountBolt(), 1).shuffleGrouping("frame1");
 
         Config conf = new Config();
         conf.setDebug(true);
 
-        /* RabbitMQ as Sink */
-        /*
+        /* RabbitMQ as Sink, dynamic */
+        /*TupleToMessage sinkScheme = new TupleToMessage() {
+            @Override
+            public byte[] extractBody(Tuple input) { return input.getStringByField("word").getBytes(); }
+
+            @Override
+            public String determineExchangeName(Tuple input) { return input.getStringByField(rabbitmqExchange); }
+
+            @Override
+            public String determineRoutingKey(Tuple input) { return input.getStringByField(rabbitmqSinkRoutingKey); }
+
+            //@Override
+            //public Map<String, Object> specifiyHeaders(Tuple input) { return new HashMap<String, Object>(); }
+
+            @Override
+            public String specifyContentType(Tuple input) { return "application/json"; }
+
+            @Override
+            public String specifyContentEncoding(Tuple input) { return "UTF-8"; }
+
+            @Override
+            public boolean specifyMessagePersistence(Tuple input) { return false; }
+        };
+        ConnectionConfig sinkConnectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqPort, rabbitmqUsername, rabbitmqPassword, rabbitmqCloudVhost, 10);
+        ProducerConfig sinkConfig = new ProducerConfigBuilder().connection(sinkConnectionConfig).build();
+        builder.setBolt("rabbitmq-sink", new RabbitMQBolt(sinkScheme))
+                .addConfigurations(sinkConfig.asMap())
+                .shuffleGrouping("frame1");
+        */
+
+        /* RabbitMQ as Sink, message attributes are non-dynamic */
         TupleToMessage sinkScheme = new TupleToMessageNonDynamic() {
           @Override
-          byte[] extractBody(Tuple input) { return input.getStringByField("my-message-body").getBytes(); }
+          public byte[] extractBody(Tuple input) { return intToBytes(input.getIntegerByField("count")); }
         };
 
-        ConnectionConfig sinkConnectionConfig = new ConnectionConfig("localhost", 5672, "guest", "guest", ConnectionFactory.DEFAULT_VHOST, 10); // host, port, username, password, virtualHost, heartBeat
+        ConnectionConfig sinkConnectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqPort, rabbitmqUsername, rabbitmqPassword, rabbitmqCloudVhost, 10);
         ProducerConfig sinkConfig = new ProducerConfigBuilder()
                 .connection(sinkConnectionConfig)
                 .contentEncoding("UTF-8")
                 .contentType("application/json")
-                .exchange("exchange-to-publish-to")
-                .routingKey("")
+                .exchange(rabbitmqExchange)
+                .routingKey(rabbitmqSinkRoutingKey)
                 .build();
 
         builder.setBolt("rabbitmq-sink", new RabbitMQBolt(sinkScheme))
-                .addConfigurations(sinkConfig)
-                .shuffleGrouping("frame2");
-        */
-        /* End RabbitMQ as Sink */
+                .addConfigurations(sinkConfig.asMap())
+                .shuffleGrouping("frame1");
+         //*/
+
 
 
         if (args != null && args.length > 0) {
@@ -115,6 +160,8 @@ public class FrameCountTopology {
 
             LocalCluster cluster = new LocalCluster();
             cluster.submitTopology("frameTopology", conf, builder.createTopology());
+
+            // Remove below lines to run indefinitely.
             Utils.sleep(100000);
             cluster.killTopology("frameTopology");
             cluster.shutdown();
