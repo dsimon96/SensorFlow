@@ -15,13 +15,13 @@ import org.apache.storm.topology.base.BaseRichBolt;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Tuple;
 import org.apache.storm.tuple.Values;
-import org.apache.storm.utils.Utils;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
+import java.util.Queue;
 
-public class FrameCountTopology {
+public class ClapDetectionTopology {
 
     private static String rabbitmqExchange = "sf.topic";
     private static String rabbitmqSpoutRoutingKey = "edge.info";
@@ -33,9 +33,13 @@ public class FrameCountTopology {
     private static String rabbitmqEdgeVhost = "edge";
     private static String rabbitmqCloudVhost = "cloud";
 
-    public static class FrameCountBolt extends BaseRichBolt {
+    public static class ClapDetectionBolt extends BaseRichBolt {
         OutputCollector _collector;
-        Map<String, Integer> counts = new HashMap<>();
+
+        float threshold = (float) 3.0;
+        int maxQueueSize = 5;
+        float volumeTotal = (float) 0.0;
+        Queue<Float> pastVolumesQueue = new LinkedList<>();
 
         @Override
         public void prepare(Map conf, TopologyContext context, OutputCollector collector) {
@@ -45,23 +49,33 @@ public class FrameCountTopology {
         @Override
         public void execute(Tuple tuple) {
             try {
-                String word = tuple.getString(0);
-                Integer count = counts.get(word);
-                if (count == null)
-                    count = 0;
-                count++;
-                counts.put(word, count);
-                _collector.emit(new Values(word, count));
+                System.out.println("starting execute");
+                float volume = Float.parseFloat(tuple.getString(0));
+                System.out.println("after tuple.getFloat");
+                pastVolumesQueue.add(new Float(volume));
+                volumeTotal += volume;
+                if (pastVolumesQueue.size() > maxQueueSize) { // Only count last maxQueueSize volumes in total.
+                    Float oldestVolume = pastVolumesQueue.remove();
+                    volumeTotal -= oldestVolume.floatValue();
+                }
+
+                if (volumeTotal > threshold) { // Determine if there was a clap.
+                    _collector.emit(new Values("clap detected!"));
+                } else {
+                    _collector.emit(new Values(". "));
+                }
+
                 _collector.ack(tuple);
             }
             catch (Exception e) {
-                System.out.println("No input for FrameCountBolt");
+                System.out.println("No input for ClapDetectionBolt");
+                System.out.println(e.toString());
             }
         }
 
         @Override
         public void declareOutputFields(OutputFieldsDeclarer declarer) {
-            declarer.declare(new Fields("word", "count")); // Declares the output fields for the component
+            declarer.declare(new Fields("detect")); // Declares the output fields for the component
         }
     }
 
@@ -77,8 +91,8 @@ public class FrameCountTopology {
         TopologyBuilder builder = new TopologyBuilder();
 
         // RabbitMQ as Spout
-        Scheme scheme = new OurCustomMessageScheme();
-        Declarator declarator = new OurCustomStormDeclarator(rabbitmqExchange, "", rabbitmqSpoutRoutingKey);
+        Scheme scheme = new SensorFlowMessageScheme();
+        Declarator declarator = new SensorFlowStormDeclarator(rabbitmqExchange, "", rabbitmqSpoutRoutingKey);
         IRichSpout spout = new RabbitMQSpout(scheme, declarator);
 
         ConnectionConfig connectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqPort, rabbitmqUsername, rabbitmqPassword, rabbitmqEdgeVhost, 10);
@@ -92,9 +106,7 @@ public class FrameCountTopology {
             .addConfigurations(spoutConfig.asMap())
             .setMaxSpoutPending(200);
 
-        // Put frame logic code into FrameCountBolt.
-        builder.setBolt("frame1", new FrameCountBolt(), 1).shuffleGrouping("rabbit1");
-        //builder.setBolt("frame2", new FrameCountBolt(), 1).shuffleGrouping("frame1");
+        builder.setBolt("clap1", new ClapDetectionBolt(), 1).shuffleGrouping("rabbit1");
 
         Config conf = new Config();
         conf.setDebug(true);
@@ -132,7 +144,7 @@ public class FrameCountTopology {
         /* RabbitMQ as Sink, message attributes are non-dynamic */
         TupleToMessage sinkScheme = new TupleToMessageNonDynamic() {
           @Override
-          public byte[] extractBody(Tuple input) { return intToBytes(input.getIntegerByField("count")); }
+          public byte[] extractBody(Tuple input) { return input.getStringByField("detect").getBytes(); }
         };
 
         ConnectionConfig sinkConnectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqPort, rabbitmqUsername, rabbitmqPassword, rabbitmqCloudVhost, 10);
@@ -146,10 +158,7 @@ public class FrameCountTopology {
 
         builder.setBolt("rabbitmq-sink", new RabbitMQBolt(sinkScheme))
                 .addConfigurations(sinkConfig.asMap())
-                .shuffleGrouping("frame1");
-         //*/
-
-
+                .shuffleGrouping("clap1");
 
         if (args != null && args.length > 0) {
             conf.setNumWorkers(3);
@@ -157,14 +166,13 @@ public class FrameCountTopology {
             StormSubmitter.submitTopologyWithProgressBar(args[0], conf, builder.createTopology());
         }
         else {
-
             LocalCluster cluster = new LocalCluster();
-            cluster.submitTopology("frameTopology", conf, builder.createTopology());
+            cluster.submitTopology("clapDetectionTopology", conf, builder.createTopology());
 
             // Remove below lines to run indefinitely.
-            Utils.sleep(100000);
-            cluster.killTopology("frameTopology");
-            cluster.shutdown();
+            //Utils.sleep(100000);
+            //cluster.killTopology("clapDetectionTopology");
+            //cluster.shutdown();
         }
     }
 }

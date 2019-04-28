@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
-public class OurCustomMessageScheme implements Scheme {
+public class SensorFlowMessageScheme implements Scheme {
 
     @Override
     public List<Object> deserialize(ByteBuffer bytes) {
