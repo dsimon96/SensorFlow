@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "org.apache.storm.starter";
+option java_package = "org.apache.storm.starter.proto";
 option java_outer_classname = "SensorFlowProto";
 
 package sensorflow;

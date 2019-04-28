@@ -35,7 +35,8 @@ public class SensorFlowMain {
 
         boolean isServer;
         String host;
-        int port = 15712;
+        int port;
+        boolean debug;
         try {
             CommandLine cmd = parser.parse(CLI_OPTIONS, args);
             if (!validateArgs(cmd)) {
@@ -45,10 +46,9 @@ public class SensorFlowMain {
             }
 
             isServer = cmd.hasOption("cloud");
-            if (isServer && cmd.hasOption("port")) {
-                port = ((Number)cmd.getParsedOptionValue("port")).intValue();
-            }
+            port = ((Number) cmd.getParsedOptionValue("port")).intValue();
             host = (String)cmd.getParsedOptionValue("host");
+            debug = cmd.hasOption("debug");
         } catch (ParseException e) {
             System.out.println("Failed to parse command line args!");
             return;
@@ -56,8 +56,18 @@ public class SensorFlowMain {
 
         if (isServer) {
             System.out.printf("Listening on port %d for connection from %s\n", port, host);
+            final SensorFlowServer server = new SensorFlowServer(host, port, debug);
+            try {
+                server.start();
+                server.blockUntilShutdown();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         } else {
             System.out.printf("Connecting to host %s\n", host);
+            final SensorFlowClient client = new SensorFlowClient(host, port, debug);
+            client.start();
+            client.blockUntilShutdown();
         }
     }
 
@@ -67,10 +77,13 @@ public class SensorFlowMain {
             return false;
         }
 
-        if (cmd.hasOption("port") && !cmd.hasOption("port"))
-
-        if (cmd.hasOption("hostname")) {
+        if (!cmd.hasOption("host")) {
             System.out.println("Error: Please specify the hostname for the paired device.");
+            return false;
+        }
+
+        if (!cmd.hasOption("port")) {
+            System.out.println("Error: Please specify the port for the cloud server.");
             return false;
         }
 
