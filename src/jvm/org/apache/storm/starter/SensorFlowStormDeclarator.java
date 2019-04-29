@@ -7,16 +7,16 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-public class OurCustomStormDeclarator implements Declarator {
+public class SensorFlowStormDeclarator implements Declarator {
     private final String exchange;
     private final String queue;
     private final String routingKey;
 
-    public OurCustomStormDeclarator(String exchange, String queue) {
+    public SensorFlowStormDeclarator(String exchange, String queue) {
         this(exchange, queue, "");
     }
 
-    public OurCustomStormDeclarator(String exchange, String queue, String routingKey) {
+    public SensorFlowStormDeclarator(String exchange, String queue, String routingKey) {
         this.exchange = exchange;
         this.queue = queue;
         this.routingKey = routingKey;

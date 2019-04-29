@@ -66,7 +66,7 @@ public class ExclamationTopology {
   public static void main(String[] args) throws Exception {
     TopologyBuilder builder = new TopologyBuilder();
 
-    Scheme scheme = new OurCustomMessageScheme();
+    Scheme scheme = new SensorFlowMessageScheme();
     IRichSpout spout = new RabbitMQSpout(scheme);
 
     builder.setSpout("word", new TestWordSpout(), 10);
