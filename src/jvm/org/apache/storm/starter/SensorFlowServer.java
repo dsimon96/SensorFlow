@@ -2,10 +2,13 @@ package org.apache.storm.starter;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
 class SensorFlowServer {
+    private final static Logger log = LoggerFactory.getLogger(SensorFlowServer.class);
     private boolean debug;
     private String edgeHost;
     private int port;
@@ -18,11 +21,6 @@ class SensorFlowServer {
     }
 
     void start() throws IOException {
-        server = ServerBuilder.forPort(port)
-                .addService(new SensorFlowCloudImpl())
-                .build()
-                .start();
-
         // register a runtime hook to shut down the server
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
@@ -30,13 +28,18 @@ class SensorFlowServer {
                 SensorFlowServer.this.stop();
             }
         });
+
+        server = ServerBuilder.forPort(port)
+                .addService(new SensorFlowCloudImpl(debug))
+                .build()
+                .start();
     }
 
     private void stop() {
-        System.out.println("Requesting server shutdown...");
+        log.info("Requesting server shutdown...");
         if (server != null) {
             server.shutdown();
-            System.out.println("Server has shut down.");
+            log.info("Server has shut down.");
         }
     }
 

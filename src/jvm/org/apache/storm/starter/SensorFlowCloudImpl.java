@@ -2,23 +2,23 @@ package org.apache.storm.starter;
 
 import io.grpc.stub.StreamObserver;
 import org.apache.storm.starter.proto.*;
-
-import java.util.HashMap;
-import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SensorFlowCloudImpl extends SensorFlowCloudGrpc.SensorFlowCloudImplBase {
-    private HashMap<String, SensorFlowJob> jobs = new HashMap<>();
+    private final static Logger log = LoggerFactory.getLogger(SensorFlowCloudImpl.class);
+    private final ExecutionManager manager;
 
-    SensorFlowCloudImpl() {
+    SensorFlowCloudImpl(boolean debug) {
+        manager = new ExecutionManager(true, debug);
     }
 
     @Override
     public void submitJob(Empty request, StreamObserver<JobToken> responseObserver) {
-        String token = UUID.randomUUID().toString();
-        SensorFlowJob job = new SensorFlowJob();
-        job.start();
-        JobToken reply = JobToken.newBuilder().setToken(token).build();
-        jobs.put(token, job);
+        String token = manager.newJob();
+        JobToken reply = JobToken.newBuilder()
+                .setToken(token)
+                .build();
         responseObserver.onNext(reply);
         responseObserver.onCompleted();
     }
@@ -27,11 +27,7 @@ public class SensorFlowCloudImpl extends SensorFlowCloudGrpc.SensorFlowCloudImpl
     public void getJobStatus(JobToken request, StreamObserver<StatusReply> responseObserver) {
         String token = request.getToken();
         StatusReply.Builder replyBuilder = StatusReply.newBuilder();
-        if (jobs.containsKey(token)) {
-            replyBuilder.setStatus(jobs.get(token).getStatus());
-        } else {
-            replyBuilder.setStatus(StatusReply.Status.DoesNotExist);
-        }
+        replyBuilder.setStatus(manager.getJobStatus(token));
         responseObserver.onNext(replyBuilder.build());
         responseObserver.onCompleted();
     }
@@ -39,15 +35,9 @@ public class SensorFlowCloudImpl extends SensorFlowCloudGrpc.SensorFlowCloudImpl
     @Override
     public void deleteJob(JobToken request, StreamObserver<DeletionReply> responseObserver) {
         String token = request.getToken();
-        boolean success;
-        if (jobs.containsKey(token)) {
-            SensorFlowJob job = jobs.get(token);
-            job.stop();
-            success = true;
-        } else {
-            success = false;
-        }
-        DeletionReply reply = DeletionReply.newBuilder().setSuccess(success).build();
+        DeletionReply reply = DeletionReply.newBuilder()
+                .setSuccess(manager.deleteJob(token))
+                .build();
         responseObserver.onNext(reply);
         responseObserver.onCompleted();
     }
