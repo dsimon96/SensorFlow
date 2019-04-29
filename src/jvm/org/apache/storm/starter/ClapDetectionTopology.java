@@ -33,11 +33,11 @@ public class ClapDetectionTopology {
     private static String rabbitmqEdgeVhost = "edge";
     private static String rabbitmqCloudVhost = "cloud";
 
-    public static class ClapDetectionBolt extends BaseRichBolt {
+    // Calculates the average volume in the recent past, and passes on the current volume.
+    public static class ClapDetection1Bolt extends BaseRichBolt {
         OutputCollector _collector;
 
-        float threshold = (float) 3.0;
-        int maxQueueSize = 5;
+        int maxQueueSize = 10;
         float volumeTotal = (float) 0.0;
         Queue<Float> pastVolumesQueue = new LinkedList<>();
 
@@ -49,9 +49,7 @@ public class ClapDetectionTopology {
         @Override
         public void execute(Tuple tuple) {
             try {
-                System.out.println("starting execute");
                 float volume = Float.parseFloat(tuple.getString(0));
-                System.out.println("after tuple.getFloat");
                 pastVolumesQueue.add(new Float(volume));
                 volumeTotal += volume;
                 if (pastVolumesQueue.size() > maxQueueSize) { // Only count last maxQueueSize volumes in total.
@@ -59,23 +57,60 @@ public class ClapDetectionTopology {
                     volumeTotal -= oldestVolume.floatValue();
                 }
 
-                if (volumeTotal > threshold) { // Determine if there was a clap.
-                    _collector.emit(new Values("clap detected!"));
-                } else {
-                    _collector.emit(new Values(". "));
-                }
-
+                float volumeAverage = volumeTotal / pastVolumesQueue.size();
+                System.out.println("from clap1, emitting " + volumeAverage + " and " + volume);
+                _collector.emit(new Values(volumeAverage, volume));
                 _collector.ack(tuple);
             }
             catch (Exception e) {
-                System.out.println("No input for ClapDetectionBolt");
+                System.out.println("No input for ClapDetection1Bolt");
                 System.out.println(e.toString());
             }
         }
 
         @Override
         public void declareOutputFields(OutputFieldsDeclarer declarer) {
-            declarer.declare(new Fields("detect")); // Declares the output fields for the component
+            declarer.declare(new Fields("vol_avg", "curr_vol")); // Declares the output fields for the component
+        }
+    }
+
+    public static class ClapDetection2Bolt extends BaseRichBolt {
+        OutputCollector _collector;
+
+        float thresholdDifference = (float) 3.0;
+
+        @Override
+        public void prepare(Map conf, TopologyContext context, OutputCollector collector) {
+            _collector = collector;
+        }
+
+        @Override
+        public void execute(Tuple tuple) {
+            try {
+                float volumeAverage = tuple.getFloat(0).floatValue();
+                float currentVolume = tuple.getFloat(1).floatValue();
+
+                System.out.println("at clap2, received " + volumeAverage + " and " + currentVolume);
+
+                float currentDifference = currentVolume - volumeAverage;
+
+                if (currentDifference > thresholdDifference) { // Determine if there was a clap.
+                    _collector.emit(new Values("clap detected!"));
+                } else {
+                    _collector.emit(new Values("nothing"));
+                }
+
+                _collector.ack(tuple);
+            }
+            catch (Exception e) {
+                System.out.println("No input for ClapDetection2Bolt");
+                System.out.println(e.toString());
+            }
+        }
+
+        @Override
+        public void declareOutputFields(OutputFieldsDeclarer declarer) {
+            declarer.declare(new Fields("detection")); // Declares the output fields for the component
         }
     }
 
@@ -106,7 +141,8 @@ public class ClapDetectionTopology {
             .addConfigurations(spoutConfig.asMap())
             .setMaxSpoutPending(200);
 
-        builder.setBolt("clap1", new ClapDetectionBolt(), 1).shuffleGrouping("rabbit1");
+        builder.setBolt("clap1", new ClapDetection1Bolt(), 1).shuffleGrouping("rabbit1");
+        builder.setBolt("clap2", new ClapDetection2Bolt(), 1).shuffleGrouping("clap1");
 
         Config conf = new Config();
         conf.setDebug(true);
@@ -144,7 +180,7 @@ public class ClapDetectionTopology {
         /* RabbitMQ as Sink, message attributes are non-dynamic */
         TupleToMessage sinkScheme = new TupleToMessageNonDynamic() {
           @Override
-          public byte[] extractBody(Tuple input) { return input.getStringByField("detect").getBytes(); }
+          public byte[] extractBody(Tuple input) { return input.getStringByField("detection").getBytes(); }
         };
 
         ConnectionConfig sinkConnectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqPort, rabbitmqUsername, rabbitmqPassword, rabbitmqCloudVhost, 10);
@@ -158,7 +194,7 @@ public class ClapDetectionTopology {
 
         builder.setBolt("rabbitmq-sink", new RabbitMQBolt(sinkScheme))
                 .addConfigurations(sinkConfig.asMap())
-                .shuffleGrouping("clap1");
+                .shuffleGrouping("clap2");
 
         if (args != null && args.length > 0) {
             conf.setNumWorkers(3);
