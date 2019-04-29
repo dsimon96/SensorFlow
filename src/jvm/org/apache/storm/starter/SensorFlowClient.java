@@ -2,23 +2,25 @@ package org.apache.storm.starter;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import org.apache.storm.starter.proto.DeletionReply;
+import org.apache.storm.starter.proto.Empty;
 import org.apache.storm.starter.proto.JobToken;
 import org.apache.storm.starter.proto.SensorFlowCloudGrpc;
-import org.apache.storm.starter.proto.StatusReply;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.TimeUnit;
 
 class SensorFlowClient {
-    private String host;
-    private int port;
+    private final static Logger log = LoggerFactory.getLogger(SensorFlowClient.class);
     private boolean debug;
     private final ManagedChannel channel;
     private final SensorFlowCloudGrpc.SensorFlowCloudBlockingStub stub;
+    private final ExecutionManager manager;
 
     SensorFlowClient(String host, int port, boolean debug) {
-        this.host = host;
-        this.port = port;
         this.debug = debug;
+        manager = new ExecutionManager(false, debug);
 
         channel = ManagedChannelBuilder.forAddress(host, port)
                 .usePlaintext()
@@ -28,9 +30,16 @@ class SensorFlowClient {
     }
 
     void start() {
-        StatusReply reply = stub.getJobStatus(JobToken.newBuilder().build());
-        StatusReply.Status status = StatusReply.Status.forNumber(reply.getStatusValue());
-        System.out.println(status.getValueDescriptor());
+        log.info("Submitting job");
+        String token = stub.submitJob(Empty.newBuilder().build()).getToken();
+        log.info("Client got token {}", token);
+        manager.addJob(token);
+
+        manager.deleteJob(token);
+        DeletionReply reply = stub.deleteJob(JobToken.newBuilder().setToken(token).build());
+        if (reply.getSuccess()) {
+            log.info("Successfully deleted job");
+        }
     }
 
     public void shutdown() throws InterruptedException {
