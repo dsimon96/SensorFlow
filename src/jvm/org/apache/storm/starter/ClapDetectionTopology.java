@@ -5,6 +5,7 @@ import io.latent.storm.rabbitmq.config.*;
 import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
 import org.apache.storm.StormSubmitter;
+import org.apache.storm.generated.StormTopology;
 import org.apache.storm.spout.Scheme;
 import org.apache.storm.task.OutputCollector;
 import org.apache.storm.task.TopologyContext;
@@ -117,14 +118,20 @@ public class ClapDetectionTopology {
         }
     }
 
-    public static IRichSpout CreateRabbitSpout(String spoutRoutingKey) {
+    public static IRichSpout CreateRabbitSpout(boolean cloud, String token, String suffix) {
+        String routingKey = CreateRoutingKey(cloud, token, suffix);
+
         // RabbitMQ as Spout
         Scheme scheme = new SensorFlowMessageScheme();
-        Declarator declarator = new SensorFlowStormDeclarator(rabbitmqExchange, "", spoutRoutingKey);
+        Declarator declarator = new SensorFlowStormDeclarator(rabbitmqExchange, "", routingKey);
         return new RabbitMQSpout(scheme, declarator);
     }
 
-    public static ConsumerConfig CreateRabbitSpoutConfig(String Vhost) {
+    public static ConsumerConfig CreateRabbitSpoutConfig(boolean cloud) {
+        String Vhost;
+        if (cloud) Vhost = rabbitmqCloudVhost;
+        else Vhost = rabbitmqEdgeVhost;
+
         ConnectionConfig connectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqPort, rabbitmqUsername, rabbitmqPassword, Vhost, 10);
         return new ConsumerConfigBuilder().connection(connectionConfig)
                 .queue("") // No queue name
@@ -133,28 +140,61 @@ public class ClapDetectionTopology {
                 .build();
     }
 
-    public static ProducerConfig CreateRabbitSinkConfig(String Vhost, String sinkRoutingKey) {
+    public static ProducerConfig CreateRabbitSinkConfig(boolean cloud, String token, String suffix) {
+        String Vhost;
+        if (cloud) Vhost = rabbitmqCloudVhost;
+        else Vhost = rabbitmqEdgeVhost;
+        String routingKey = CreateRoutingKey(cloud, token, suffix);
+
         ConnectionConfig sinkConnectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqPort, rabbitmqUsername, rabbitmqPassword, Vhost, 10);
         return new ProducerConfigBuilder()
                 .connection(sinkConnectionConfig)
                 .contentEncoding("UTF-8")
                 .contentType("application/json")
                 .exchange(rabbitmqExchange)
-                .routingKey(sinkRoutingKey)
+                .routingKey(routingKey)
                 .build();
     }
 
-    public static void main(String[] args) throws Exception {
+    public static String CreateRoutingKey(boolean cloud, String token, String suffix) {
+        if (cloud) return "cloud." + token + "." + suffix;
+        return "edge." + token + "." + suffix;
+    }
+
+    public static StormTopology CreateClapDetectionTopology(boolean cloud, String token, boolean debug) {
         TopologyBuilder builder = new TopologyBuilder();
+        String suffix = "info";
 
-        // Rabbit Spout as Sensor Input
-        IRichSpout spout1 = CreateRabbitSpout(rabbitmqSpoutRoutingKey);
-        ConsumerConfig spout1Config = CreateRabbitSpoutConfig(rabbitmqEdgeVhost);
-        builder.setSpout("rabbit-spout1", spout1, 1)
-            .addConfigurations(spout1Config.asMap())
-            .setMaxSpoutPending(200);
+        /* Begin RabbitMQ as Sensor Input */
+        if (!debug) suffix = "sensor-spout";
+        IRichSpout sensorSpout = CreateRabbitSpout(false, token, suffix); // Receiving sensor data, always edge.
+        ConsumerConfig sensorSpoutConfig = CreateRabbitSpoutConfig(false); // Receiving sensor data, always edge.
+        builder.setSpout("sensor-spout", sensorSpout, 1)
+                .addConfigurations(sensorSpoutConfig.asMap())
+                .setMaxSpoutPending(200);
 
-        builder.setBolt("clap1", new ClapDetection1Bolt(), 1).shuffleGrouping("rabbit-spout1");
+        // Add sink to possibly route to cloud.
+        TupleToMessage sensorSinkScheme = new TupleToMessageNonDynamic() {
+            @Override
+            public byte[] extractBody(Tuple input) {
+                System.out.println("Input from sensor spout was " + input.getString(0));
+                return input.getString(0).getBytes();
+            }
+        };
+        ProducerConfig sensorSinkConfig = CreateRabbitSinkConfig(cloud, token, "sensor-sink");
+        builder.setBolt("sensor-sink", new RabbitMQBolt(sensorSinkScheme))
+                .addConfigurations(sensorSinkConfig.asMap())
+                .shuffleGrouping("sensor-spout");
+        /* End RabbitMQ as Sensor Input */
+
+        IRichSpout spout1 = CreateRabbitSpout(cloud, token, "sensor-sink");
+        ConsumerConfig spout1Config = CreateRabbitSpoutConfig(cloud);
+        builder.setSpout("spout1", spout1, 1)
+                .addConfigurations(spout1Config.asMap())
+                .setMaxSpoutPending(200);
+
+
+        builder.setBolt("clap1", new ClapDetection1Bolt(), 1).shuffleGrouping("spout1");
 
         // Midbolt Sink and Spout
         TupleToMessage sink1Scheme = new TupleToMessageNonDynamic() {
@@ -165,34 +205,53 @@ public class ClapDetectionTopology {
                 return (volAvgStr + ";" + currVolStr).getBytes();
             }
         };
-        ProducerConfig sink1Config = CreateRabbitSinkConfig(rabbitmqEdgeVhost, rabbitmqMidboltRoutingKey);
+        ProducerConfig sink1Config = CreateRabbitSinkConfig(cloud, token, "sink1");
 
-        builder.setBolt("rabbit-sink1", new RabbitMQBolt(sink1Scheme))
+        builder.setBolt("sink1", new RabbitMQBolt(sink1Scheme))
                 .addConfigurations(sink1Config.asMap())
                 .shuffleGrouping("clap1");
 
-        IRichSpout spout2 = CreateRabbitSpout(rabbitmqMidboltRoutingKey);
-        ConsumerConfig spout2Config = CreateRabbitSpoutConfig(rabbitmqEdgeVhost);
-        builder.setSpout("rabbit-spout2", spout2, 1)
+        IRichSpout spout2 = CreateRabbitSpout(cloud, token, "sink1");
+        ConsumerConfig spout2Config = CreateRabbitSpoutConfig(cloud);
+        builder.setSpout("spout2", spout2, 1)
                 .addConfigurations(spout2Config.asMap())
                 .setMaxSpoutPending(200);
 
-
-        builder.setBolt("clap2", new ClapDetection2Bolt(), 1).shuffleGrouping("rabbit-spout2");
+        builder.setBolt("clap2", new ClapDetection2Bolt(), 1).shuffleGrouping("spout2");
 
         // RabbitMQ as Sink, message attributes are non-dynamic
         TupleToMessage sink2Scheme = new TupleToMessageNonDynamic() {
-          @Override
-          public byte[] extractBody(Tuple input) { return input.getStringByField("detection").getBytes(); }
+            @Override
+            public byte[] extractBody(Tuple input) { return input.getStringByField("detection").getBytes(); }
         };
 
         // Rabbit Sink as Application Output
-        ProducerConfig sink2Config = CreateRabbitSinkConfig(rabbitmqCloudVhost, rabbitmqSinkRoutingKey);
+        if (!debug) suffix = "sink2";
+        if (debug) {
+            suffix = "info";
+            cloud = true; // Output to cloud for testing.
+        }
+        ProducerConfig sink2Config = CreateRabbitSinkConfig(cloud, token, suffix);
 
-        builder.setBolt("rabbit-sink2", new RabbitMQBolt(sink2Scheme))
+        builder.setBolt("sink2", new RabbitMQBolt(sink2Scheme))
                 .addConfigurations(sink2Config.asMap())
                 .shuffleGrouping("clap2");
 
+        return builder.createTopology();
+    }
+
+    /* TODO(zeleena): Make the above function modular. Fix the below functions for new inputs.
+        Add a sink after sensor spout so that computation can be done on the cloud for clap1.
+        Possibly make the above spout/sink combo into a method.
+        Look into tc.
+     */
+
+    public static void main(String[] args) throws Exception {
+        boolean edge = false;
+        String token = "fake-token";
+        boolean debug = true;
+
+        StormTopology topology = CreateClapDetectionTopology(edge, token, debug);
 
         Config conf = new Config();
         conf.setDebug(true);
@@ -200,11 +259,11 @@ public class ClapDetectionTopology {
         if (args != null && args.length > 0) {
             conf.setNumWorkers(3);
 
-            StormSubmitter.submitTopologyWithProgressBar(args[0], conf, builder.createTopology());
+            StormSubmitter.submitTopologyWithProgressBar(args[0], conf, topology);
         }
         else {
             LocalCluster cluster = new LocalCluster();
-            cluster.submitTopology("clapDetectionTopology", conf, builder.createTopology());
+            cluster.submitTopology("clapDetectionTopology", conf, topology);
 
             // Remove below lines to run indefinitely.
             //Utils.sleep(100000);
