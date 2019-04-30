@@ -6,6 +6,7 @@ import org.apache.storm.starter.proto.DeletionReply;
 import org.apache.storm.starter.proto.Empty;
 import org.apache.storm.starter.proto.JobToken;
 import org.apache.storm.starter.proto.SensorFlowCloudGrpc;
+import org.apache.storm.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,15 +14,14 @@ import java.util.concurrent.TimeUnit;
 
 class SensorFlowClient {
     private final static Logger log = LoggerFactory.getLogger(SensorFlowClient.class);
-    private boolean debug;
     private final ManagedChannel channel;
     private final SensorFlowCloudGrpc.SensorFlowCloudBlockingStub stub;
     private final ExecutionManager manager;
 
     SensorFlowClient(String host, int port, boolean debug) {
-        this.debug = debug;
         manager = new ExecutionManager(false, debug);
 
+        log.info("Connecting to {}:{}", host, port);
         channel = ManagedChannelBuilder.forAddress(host, port)
                 .usePlaintext()
                 .build();
@@ -35,6 +35,8 @@ class SensorFlowClient {
         log.info("Client got token {}", token);
         manager.addJob(token);
 
+        Utils.sleep(30000);
+
         manager.deleteJob(token);
         DeletionReply reply = stub.deleteJob(JobToken.newBuilder().setToken(token).build());
         if (reply.getSuccess()) {
@@ -44,8 +46,14 @@ class SensorFlowClient {
 
     public void shutdown() throws InterruptedException {
         channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+        manager.shutdown();
     }
 
     void blockUntilShutdown() {
+        try {
+            shutdown();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

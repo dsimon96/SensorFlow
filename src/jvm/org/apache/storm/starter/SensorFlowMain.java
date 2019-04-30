@@ -55,7 +55,6 @@ public class SensorFlowMain {
         }
 
         if (isServer) {
-            System.out.printf("Listening on port %d for connection from %s\n", port, host);
             final SensorFlowServer server = new SensorFlowServer(host, port, debug);
             try {
                 server.start();
@@ -64,7 +63,6 @@ public class SensorFlowMain {
                 e.printStackTrace();
             }
         } else {
-            System.out.printf("Connecting to host %s\n", host);
             final SensorFlowClient client = new SensorFlowClient(host, port, debug);
             client.start();
             client.blockUntilShutdown();

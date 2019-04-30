@@ -1,24 +1,29 @@
 package org.apache.storm.starter;
 
+import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
+import org.apache.storm.generated.StormTopology;
 import org.apache.storm.starter.proto.StatusReply;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 class SensorFlowJob {
     private final static Logger log = LoggerFactory.getLogger(SensorFlowJob.class);
-    private String token;
-    private boolean isCloud;
-    private boolean debug;
+    private final String token;
+    private final boolean isCloud;
+    private final boolean debug;
+    private final LocalCluster cluster;
     private boolean isInitialized = false;
     private boolean isRunning = false;
 
-    SensorFlowJob(boolean isCloud, boolean debug, String token) {
+    SensorFlowJob(boolean isCloud, boolean debug, String token, LocalCluster cluster) {
         this.isCloud = isCloud;
+        this.debug = debug;
         this.token = token;
+        this.cluster = cluster;
     }
 
-    void start(LocalCluster cluster) {
+    void start() {
         log.info("Starting job {}", token);
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
@@ -29,11 +34,19 @@ class SensorFlowJob {
 
         isInitialized = true;
         isRunning = true;
+
+        Config conf = new Config();
+        conf.setDebug(debug);
+
+        StormTopology topology = ClapDetectionTopology.CreateClapDetectionTopology(isCloud, token, debug);
+
+        cluster.submitTopology(token, conf, topology);
     }
 
     void stop() {
         log.info("Stopping job {}", token);
         if (isRunning) {
+            cluster.killTopology(token);
             isRunning = false;
         }
     }

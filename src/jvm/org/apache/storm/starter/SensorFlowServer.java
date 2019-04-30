@@ -13,6 +13,7 @@ class SensorFlowServer {
     private String edgeHost;
     private int port;
     private Server server;
+    private SensorFlowCloudImpl service;
 
     SensorFlowServer(String edgeHost, int port, boolean debug) {
         this.debug = debug;
@@ -29,8 +30,10 @@ class SensorFlowServer {
             }
         });
 
+        log.info("Listening on port {}", port);
+        service = new SensorFlowCloudImpl(debug);
         server = ServerBuilder.forPort(port)
-                .addService(new SensorFlowCloudImpl(debug))
+                .addService(service)
                 .build()
                 .start();
     }
@@ -46,6 +49,9 @@ class SensorFlowServer {
     void blockUntilShutdown() throws InterruptedException {
         if (server != null) {
             server.awaitTermination();
+        }
+        if (service != null) {
+            service.shutdown();
         }
     }
 }

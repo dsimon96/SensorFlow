@@ -15,6 +15,7 @@ public class SensorFlowCloudImpl extends SensorFlowCloudGrpc.SensorFlowCloudImpl
 
     @Override
     public void submitJob(Empty request, StreamObserver<JobToken> responseObserver) {
+        log.info("SubmitJob()");
         String token = manager.newJob();
         JobToken reply = JobToken.newBuilder()
                 .setToken(token)
@@ -26,15 +27,18 @@ public class SensorFlowCloudImpl extends SensorFlowCloudGrpc.SensorFlowCloudImpl
     @Override
     public void getJobStatus(JobToken request, StreamObserver<StatusReply> responseObserver) {
         String token = request.getToken();
-        StatusReply.Builder replyBuilder = StatusReply.newBuilder();
-        replyBuilder.setStatus(manager.getJobStatus(token));
-        responseObserver.onNext(replyBuilder.build());
+        log.info("GetJobStatus({})", token);
+        StatusReply reply = StatusReply.newBuilder()
+                .setStatus(manager.getJobStatus(token))
+                .build();
+        responseObserver.onNext(reply);
         responseObserver.onCompleted();
     }
 
     @Override
     public void deleteJob(JobToken request, StreamObserver<DeletionReply> responseObserver) {
         String token = request.getToken();
+        log.info("DeleteJob({})", token);
         DeletionReply reply = DeletionReply.newBuilder()
                 .setSuccess(manager.deleteJob(token))
                 .build();
@@ -45,5 +49,9 @@ public class SensorFlowCloudImpl extends SensorFlowCloudGrpc.SensorFlowCloudImpl
     @Override
     public void setJobSchedule(JobSchedule request, StreamObserver<ScheduleReply> responseObserver) {
         super.setJobSchedule(request, responseObserver);
+    }
+
+    void shutdown() {
+        manager.shutdown();
     }
 }

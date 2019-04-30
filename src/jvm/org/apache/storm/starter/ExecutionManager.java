@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentMap;
 
 class ExecutionManager {
     private final static Logger log = LoggerFactory.getLogger(ExecutionManager.class);
-    private final LocalCluster cluster = new LocalCluster();
+    private final LocalCluster cluster;
     private final ConcurrentMap<String, SensorFlowJob> jobs = new ConcurrentHashMap<>();
     private final boolean isCloud;
     private final boolean debug;
@@ -19,6 +19,20 @@ class ExecutionManager {
     ExecutionManager(boolean isCloud, boolean debug) {
         this.isCloud = isCloud;
         this.debug = debug;
+
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                ExecutionManager.this.shutdown();
+            }
+        });
+        cluster = new LocalCluster();
+    }
+
+    void shutdown() {
+        if (cluster != null) {
+            cluster.shutdown();
+        }
     }
 
     String newJob() {
@@ -30,9 +44,9 @@ class ExecutionManager {
 
     void addJob(String token) {
         log.info("Adding new job with token {}", token);
-        SensorFlowJob job = new SensorFlowJob(isCloud, debug, token);
+        SensorFlowJob job = new SensorFlowJob(isCloud, debug, token, cluster);
         jobs.put(token, job);
-        job.start(cluster);
+        job.start();
     }
 
     boolean deleteJob(String token) {
