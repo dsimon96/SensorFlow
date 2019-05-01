@@ -31,6 +31,14 @@ resource "aws_security_group" "default" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # allow all internal traffic
+  ingress {
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    self = "true"
+  }
+
   # allow all outbound traffic
   egress {
     from_port   = 0
@@ -47,8 +55,8 @@ resource "aws_key_pair" "auth" {
 
 resource "aws_instance" "edge" {
   connection {
-    type  = "ssh"
-    user  = "ubuntu"
+    type        = "ssh"
+    user        = "ubuntu"
     private_key = "${file(var.private_key_path)}"
   }
 
@@ -61,13 +69,33 @@ resource "aws_instance" "edge" {
   vpc_security_group_ids = ["${aws_security_group.default.id}"]
   subnet_id              = "${aws_default_subnet.default.id}"
 
-  provisioner "remote-exec" {}
+  provisioner "file" {
+    source      = "../../scripts/setup-remote-exchange.sh"
+    destination = "/tmp/setup-remote-exchange.sh"
+  }
+
+  provisioner "file" {
+    source      = "../../scripts/setup-remote-exchange.sh"
+    destination = "/tmp/setup-remote-exchange.sh"
+  }
+
+  provisioner "remote-exec" {
+    scripts = [
+      "../../scripts/install-arm64.sh",
+    ]
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "chmod +x /tmp/setup-remote-exchange.sh",
+    ]
+  }
 }
 
 resource "aws_instance" "cloud" {
   connection {
-    type  = "ssh"
-    user  = "ubuntu"
+    type        = "ssh"
+    user        = "ubuntu"
     private_key = "${file(var.private_key_path)}"
   }
 
@@ -80,5 +108,20 @@ resource "aws_instance" "cloud" {
   vpc_security_group_ids = ["${aws_security_group.default.id}"]
   subnet_id              = "${aws_default_subnet.default.id}"
 
-  provisioner "remote-exec" {}
+  provisioner "file" {
+    source      = "../../scripts/setup-remote-exchange.sh"
+    destination = "/tmp/setup-remote-exchange.sh"
+  }
+
+  provisioner "remote-exec" {
+    scripts = [
+      "../../scripts/install-amd64.sh",
+    ]
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "chmod +x /tmp/setup-remote-exchange.sh",
+    ]
+  }
 }

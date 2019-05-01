@@ -11,9 +11,9 @@ curl -s https://packagecloud.io/install/repositories/rabbitmq/rabbitmq-server/sc
 
 # install erlang
 sudo apt update
-sudo apt -y install esl-erlang
-
 
 # install RabbitMQ server
-sudo apt -y install rabbitmq-server
+sudo apt -y install openjdk-8-jre-headless
+sudo apt -y install erlang-nox=1:20.2.2+dfsg-1ubuntu2
+sudo apt -y install rabbitmq-server=3.7.6-1
 
