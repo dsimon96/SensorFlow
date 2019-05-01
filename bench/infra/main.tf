@@ -125,3 +125,14 @@ resource "aws_instance" "cloud" {
     ]
   }
 }
+
+resource "aws_instance" "iot" {
+  instance_type = "c5.xlarge"
+  ami               = "ami-0c55b159cbfafe1f0"
+  availability_zone = "us-east-2b"
+
+  key_name = "${aws_key_pair.auth.id}"
+
+  vpc_security_group_ids = ["${aws_security_group.default.id}"]
+  subnet_id              = "${aws_default_subnet.default.id}"
+}
