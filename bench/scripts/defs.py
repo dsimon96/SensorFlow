@@ -1,0 +1,5 @@
+CLOUD_DNS="ec2-18-191-199-197.us-east-2.compute.amazonaws.com"
+EDGE_DNS="ec2-18-224-6-175.us-east-2.compute.amazonaws.com"
+TOKEN="59121544-2955-48ff-ac2b-4170ad57ebd3"
+SEND_SUFFIX="sensor-spout"
+RECV_SUFFIX="sink2"
