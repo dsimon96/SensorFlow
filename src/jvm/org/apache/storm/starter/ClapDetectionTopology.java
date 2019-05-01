@@ -127,12 +127,14 @@ public class ClapDetectionTopology {
         return new RabbitMQSpout(scheme, declarator);
     }
 
-    public static ConsumerConfig CreateRabbitSpoutConfig(boolean cloud) {
+    public static ConsumerConfig CreateRabbitSpoutConfig(boolean cloud, boolean debug) {
         String Vhost;
         if (cloud) Vhost = rabbitmqCloudVhost;
         else Vhost = rabbitmqEdgeVhost;
 
-        ConnectionConfig connectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqPort, rabbitmqUsername, rabbitmqPassword, Vhost, 10);
+        ConnectionConfig connectionConfig;
+        if (debug) connectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqPort, rabbitmqUsername, rabbitmqPassword, Vhost, 10);
+        else connectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqUsername, rabbitmqPassword);
         return new ConsumerConfigBuilder().connection(connectionConfig)
                 .queue("") // No queue name
                 .prefetch(200)
@@ -140,13 +142,15 @@ public class ClapDetectionTopology {
                 .build();
     }
 
-    public static ProducerConfig CreateRabbitSinkConfig(boolean cloud, String token, String suffix) {
+    public static ProducerConfig CreateRabbitSinkConfig(boolean cloud, String token, String suffix, boolean debug) {
         String Vhost;
         if (cloud) Vhost = rabbitmqCloudVhost;
         else Vhost = rabbitmqEdgeVhost;
         String routingKey = CreateRoutingKey(cloud, token, suffix);
 
-        ConnectionConfig sinkConnectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqPort, rabbitmqUsername, rabbitmqPassword, Vhost, 10);
+        ConnectionConfig sinkConnectionConfig;
+        if (debug) sinkConnectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqPort, rabbitmqUsername, rabbitmqPassword, Vhost, 10);
+        else sinkConnectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqUsername, rabbitmqPassword);
         return new ProducerConfigBuilder()
                 .connection(sinkConnectionConfig)
                 .contentEncoding("UTF-8")
@@ -161,6 +165,7 @@ public class ClapDetectionTopology {
         return "edge." + token + "." + suffix;
     }
 
+    // debug = false does not use a vhost.
     public static StormTopology CreateClapDetectionTopology(boolean cloud, String token, boolean debug) {
         TopologyBuilder builder = new TopologyBuilder();
         String suffix = "info";
@@ -168,7 +173,7 @@ public class ClapDetectionTopology {
         /* Begin RabbitMQ as Sensor Input */
         if (!debug) suffix = "sensor-spout";
         IRichSpout sensorSpout = CreateRabbitSpout(false, token, suffix); // Receiving sensor data, always edge.
-        ConsumerConfig sensorSpoutConfig = CreateRabbitSpoutConfig(false); // Receiving sensor data, always edge.
+        ConsumerConfig sensorSpoutConfig = CreateRabbitSpoutConfig(false, debug); // Receiving sensor data, always edge.
         builder.setSpout("sensor-spout", sensorSpout, 1)
                 .addConfigurations(sensorSpoutConfig.asMap())
                 .setMaxSpoutPending(200);
@@ -181,14 +186,14 @@ public class ClapDetectionTopology {
                 return input.getString(0).getBytes();
             }
         };
-        ProducerConfig sensorSinkConfig = CreateRabbitSinkConfig(cloud, token, "sensor-sink");
+        ProducerConfig sensorSinkConfig = CreateRabbitSinkConfig(cloud, token, "sensor-sink", debug);
         builder.setBolt("sensor-sink", new RabbitMQBolt(sensorSinkScheme))
                 .addConfigurations(sensorSinkConfig.asMap())
                 .shuffleGrouping("sensor-spout");
         /* End RabbitMQ as Sensor Input */
 
         IRichSpout spout1 = CreateRabbitSpout(cloud, token, "sensor-sink");
-        ConsumerConfig spout1Config = CreateRabbitSpoutConfig(cloud);
+        ConsumerConfig spout1Config = CreateRabbitSpoutConfig(cloud, debug);
         builder.setSpout("spout1", spout1, 1)
                 .addConfigurations(spout1Config.asMap())
                 .setMaxSpoutPending(200);
@@ -205,14 +210,14 @@ public class ClapDetectionTopology {
                 return (volAvgStr + ";" + currVolStr).getBytes();
             }
         };
-        ProducerConfig sink1Config = CreateRabbitSinkConfig(cloud, token, "sink1");
+        ProducerConfig sink1Config = CreateRabbitSinkConfig(cloud, token, "sink1", debug);
 
         builder.setBolt("sink1", new RabbitMQBolt(sink1Scheme))
                 .addConfigurations(sink1Config.asMap())
                 .shuffleGrouping("clap1");
 
         IRichSpout spout2 = CreateRabbitSpout(cloud, token, "sink1");
-        ConsumerConfig spout2Config = CreateRabbitSpoutConfig(cloud);
+        ConsumerConfig spout2Config = CreateRabbitSpoutConfig(cloud, debug);
         builder.setSpout("spout2", spout2, 1)
                 .addConfigurations(spout2Config.asMap())
                 .setMaxSpoutPending(200);
@@ -231,7 +236,7 @@ public class ClapDetectionTopology {
             suffix = "info";
             cloud = true; // Output to cloud for testing.
         }
-        ProducerConfig sink2Config = CreateRabbitSinkConfig(cloud, token, suffix);
+        ProducerConfig sink2Config = CreateRabbitSinkConfig(cloud, token, suffix, debug);
 
         builder.setBolt("sink2", new RabbitMQBolt(sink2Scheme))
                 .addConfigurations(sink2Config.asMap())
@@ -239,12 +244,6 @@ public class ClapDetectionTopology {
 
         return builder.createTopology();
     }
-
-    /* TODO(zeleena): Make the above function modular. Fix the below functions for new inputs.
-        Add a sink after sensor spout so that computation can be done on the cloud for clap1.
-        Possibly make the above spout/sink combo into a method.
-        Look into tc.
-     */
 
     public static void main(String[] args) throws Exception {
         boolean edge = false;
