@@ -45,11 +45,12 @@ public class ClapDetectionTopologyAllOnOne {
                 .build();
     }
 
-    private static ProducerConfig createRabbitSinkConfig(boolean cloud, String token, String suffix, boolean debug) {
-        String Vhost;
+    private static ProducerConfig createRabbitSinkConfig(boolean cloud, String token, String suffix, boolean debug, boolean sink_is_cloud) {
+        String Vhost;  String routingKey;
         if (cloud) Vhost = rabbitmqCloudVhost;
         else Vhost = rabbitmqEdgeVhost;
-        String routingKey = createRoutingKey(cloud, token, suffix);
+        if (sink_is_cloud) routingKey = createRoutingKey(true, token, suffix);
+        else routingKey = createRoutingKey(false, token, suffix);
 
         ConnectionConfig sinkConnectionConfig;
         if (debug) sinkConnectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqPort, rabbitmqUsername, rabbitmqPassword, Vhost, 10);
@@ -69,7 +70,7 @@ public class ClapDetectionTopologyAllOnOne {
     }
 
     // debug = false does not use a vhost.
-    public static StormTopology CreateClapDetectionTopologyAllOnOne(boolean cloud, String token, boolean debug) {
+    public static StormTopology CreateClapDetectionTopologyAllOnOne(boolean cloud, String token, boolean debug, boolean sink_is_cloud) {
         TopologyBuilder builder = new TopologyBuilder();
         String suffix = "info";
 
@@ -89,7 +90,7 @@ public class ClapDetectionTopologyAllOnOne {
                 return input.getString(0).getBytes();
             }
         };
-        ProducerConfig sensorSinkConfig = createRabbitSinkConfig(cloud, token, "sensor-sink", debug);
+        ProducerConfig sensorSinkConfig = createRabbitSinkConfig(cloud, token, "sensor-sink", debug, sink_is_cloud);
         builder.setBolt("sensor-sink", new RabbitMQBolt(sensorSinkScheme))
                 .addConfigurations(sensorSinkConfig.asMap())
                 .shuffleGrouping("sensor-spout");
@@ -113,7 +114,7 @@ public class ClapDetectionTopologyAllOnOne {
                 return (volAvgStr + ";" + currVolStr).getBytes();
             }
         };
-        ProducerConfig sink1Config = createRabbitSinkConfig(cloud, token, "sink1", debug);
+        ProducerConfig sink1Config = createRabbitSinkConfig(cloud, token, "sink1", debug, sink_is_cloud);
 
         builder.setBolt("sink1", new RabbitMQBolt(sink1Scheme))
                 .addConfigurations(sink1Config.asMap())
@@ -137,36 +138,12 @@ public class ClapDetectionTopologyAllOnOne {
         if (!debug) suffix = "sink2";
         else suffix = "info";
 
-        ProducerConfig sink2Config = createRabbitSinkConfig(cloud, token, suffix, debug);
+        ProducerConfig sink2Config = createRabbitSinkConfig(cloud, token, suffix, debug, sink_is_cloud);
 
         builder.setBolt("sink2", new RabbitMQBolt(sink2Scheme))
                 .addConfigurations(sink2Config.asMap())
                 .shuffleGrouping("clap2");
 
         return builder.createTopology();
-    }
-
-    public static void main(String[] args) throws Exception {
-        String token = "fake-token";
-
-        StormTopology topology = CreateClapDetectionTopologyAllOnOne(false, token, true);
-
-        Config conf = new Config();
-        conf.setDebug(true);
-
-        if (args != null && args.length > 0) {
-            conf.setNumWorkers(3);
-
-            StormSubmitter.submitTopologyWithProgressBar(args[0], conf, topology);
-        }
-        else {
-            LocalCluster cluster = new LocalCluster();
-            cluster.submitTopology("clapDetectionTopology", conf, topology);
-
-            // Remove below lines to run indefinitely.
-            //Utils.sleep(100000);
-            //cluster.killTopology("clapDetectionTopology");
-            //cluster.shutdown();
-        }
     }
 }
