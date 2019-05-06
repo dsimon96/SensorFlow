@@ -2,9 +2,6 @@ package org.apache.storm.starter;
 
 import io.latent.storm.rabbitmq.*;
 import io.latent.storm.rabbitmq.config.*;
-import org.apache.storm.Config;
-import org.apache.storm.LocalCluster;
-import org.apache.storm.StormSubmitter;
 import org.apache.storm.generated.StormTopology;
 import org.apache.storm.spout.Scheme;
 import org.apache.storm.topology.IRichSpout;
@@ -69,14 +66,14 @@ public class ClapDetectionTopologyHalfAndHalf {
     }
 
     // debug = false does not use a vhost.
-    public static StormTopology CreateClapDetectionTopologyHalfAndHalf(String token, boolean debug) {
+    public static StormTopology CreateClapDetectionTopologyHalfAndHalf(boolean cloud, String token, boolean debug) {
         TopologyBuilder builder = new TopologyBuilder();
         String suffix = "info";
 
         /* Begin RabbitMQ as Sensor Input */
         if (!debug) suffix = "sensor-spout";
-        IRichSpout sensorSpout = createRabbitSpout(false, token, suffix); // Receiving sensor data, always edge.
-        ConsumerConfig sensorSpoutConfig = createRabbitSpoutConfig(false, debug); // Receiving sensor data, always edge.
+        IRichSpout sensorSpout = createRabbitSpout(cloud, token, suffix); // Receiving sensor data, always edge.
+        ConsumerConfig sensorSpoutConfig = createRabbitSpoutConfig(cloud, debug); // Receiving sensor data, always edge.
         builder.setSpout("sensor-spout", sensorSpout, 1)
                 .addConfigurations(sensorSpoutConfig.asMap())
                 .setMaxSpoutPending(200);
@@ -95,8 +92,8 @@ public class ClapDetectionTopologyHalfAndHalf {
                 .shuffleGrouping("sensor-spout");
         /* End RabbitMQ as Sensor Input */
 
-        IRichSpout spout1 = createRabbitSpout(false, token, "sensor-sink");
-        ConsumerConfig spout1Config = createRabbitSpoutConfig(false, debug);
+        IRichSpout spout1 = createRabbitSpout(cloud, token, "sensor-sink");
+        ConsumerConfig spout1Config = createRabbitSpoutConfig(cloud, debug);
         builder.setSpout("spout1", spout1, 1)
                 .addConfigurations(spout1Config.asMap())
                 .setMaxSpoutPending(200);
@@ -119,8 +116,8 @@ public class ClapDetectionTopologyHalfAndHalf {
                 .addConfigurations(sink1Config.asMap())
                 .shuffleGrouping("clap1");
 
-        IRichSpout spout2 = createRabbitSpout(true, token, "sink1");
-        ConsumerConfig spout2Config = createRabbitSpoutConfig(true, debug);
+        IRichSpout spout2 = createRabbitSpout(cloud, token, "sink1");
+        ConsumerConfig spout2Config = createRabbitSpoutConfig(cloud, debug);
         builder.setSpout("spout2", spout2, 1)
                 .addConfigurations(spout2Config.asMap())
                 .setMaxSpoutPending(200);
@@ -143,29 +140,5 @@ public class ClapDetectionTopologyHalfAndHalf {
                 .shuffleGrouping("clap2");
 
         return builder.createTopology();
-    }
-
-    public static void main(String[] args) throws Exception {
-        String token = "fake-token";
-
-        StormTopology topology = CreateClapDetectionTopologyHalfAndHalf(token, true);
-
-        Config conf = new Config();
-        conf.setDebug(true);
-
-        if (args != null && args.length > 0) {
-            conf.setNumWorkers(3);
-
-            StormSubmitter.submitTopologyWithProgressBar(args[0], conf, topology);
-        }
-        else {
-            LocalCluster cluster = new LocalCluster();
-            cluster.submitTopology("clapDetectionTopology", conf, topology);
-
-            // Remove below lines to run indefinitely.
-            //Utils.sleep(100000);
-            //cluster.killTopology("clapDetectionTopology");
-            //cluster.shutdown();
-        }
     }
 }
