@@ -12,4 +12,4 @@ sudo rabbitmqctl set_policy federate-me '^sf\.' \
 
 # on each vhost add the other as an upstream
 sudo rabbitmqctl set_parameter federation-upstream name \
-	"{\"uri\":\"amqp://$1/\",\"max-hops\":1}"
+	"{\"uri\":\"amqp://sf-admin:buzzword@$1\",\"max-hops\":1}"

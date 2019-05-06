@@ -4,7 +4,7 @@ from datetime import datetime
 
 creds = pika.PlainCredentials('sf-admin', 'buzzword')
 conn = pika.BlockingConnection(
-    pika.ConnectionParameters(host=EDGE_DNS, credentials=creds))
+    pika.ConnectionParameters(host=EGRESS_HOST, credentials=creds))
 channel = conn.channel()
 
 channel.exchange_declare(exchange='sf.topic', exchange_type='topic', durable=True)
@@ -12,7 +12,7 @@ channel.exchange_declare(exchange='sf.topic', exchange_type='topic', durable=Tru
 result = channel.queue_declare('', exclusive=True)
 queue_name = result.method.queue
 
-binding_key = 'edge.%s.%s' % (TOKEN, RECV_SUFFIX)
+binding_key = '%s.%s.%s' % (RECV_PREFIX, TOKEN, RECV_SUFFIX)
 channel.queue_bind(exchange='sf.topic', queue=queue_name, routing_key=binding_key)
 
 times = []

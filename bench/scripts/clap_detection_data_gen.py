@@ -5,26 +5,22 @@ from defs import *
 
 creds = pika.PlainCredentials('sf-admin', 'buzzword')
 conn = pika.BlockingConnection(
-    pika.ConnectionParameters(host=EDGE_DNS, credentials=creds))
+    pika.ConnectionParameters(host=INGRESS_HOST, credentials=creds))
 channel = conn.channel()
 
 channel.exchange_declare(exchange='sf.topic', exchange_type='topic', durable=True)
 
 times = []
+wait_time = float(1)/TPUT
 
-routing_key = 'edge.%s.%s' % (TOKEN, SEND_SUFFIX)
-scaling_factor = 1
-for i in range(30):
-    if 10 <= i and i <= 20:
-        message = str(scaling_factor *(5 - abs(i - 15)))
-    else:
-        message = str(0.0)
+routing_key = '%s.%s.%s' % (SEND_PREFIX, TOKEN, SEND_SUFFIX)
+for i, message in enumerate(MESSAGES):
     times.append(datetime.utcnow())
     channel.basic_publish(exchange='sf.topic',
                           routing_key=routing_key,
-                          body=message)
+                          body=str(message))
     print("Sent %r:%r" % (routing_key, message))
-    time.sleep(0.25)
+    time.sleep(wait_time)
 
 conn.close()
 
