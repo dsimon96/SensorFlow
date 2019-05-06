@@ -5,7 +5,7 @@ MICROSECONDS = 1000
 
 # Thanks Stacked Overflow post https://stackoverflow.com/questions/24575869/read-file-and-plot-cdf-in-python
 
-conn_type = "pop" # "local" or "no-tc" or "pop"
+conn_type = "no-tc" # "local" or "no-tc" or "pop"
 
 cloud_local = sorted(set(np.loadtxt('../results/diff-all-cloud-local.txt') / MICROSECONDS))
 edge_local = sorted(set(np.loadtxt('../results/diff-all-edge-local.txt') / MICROSECONDS))
@@ -75,10 +75,10 @@ elif conn_type == "pop":
 	s_cdf, s_bin_edges = get_cdf(split_pop)
 	v_cdf, v_bin_edges = get_cdf(via_edge_pop)
 else:
-	c_cdf, c_bin_edges = get_cdf(cloud_local)
-	e_cdf, e_bin_edges = get_cdf(edge_local)
-	s_cdf, s_bin_edges = get_cdf(split_local)
-	v_cdf, v_bin_edges = get_cdf(via_edge_local)
+	c_cdf, c_bin_edges = get_cdf(cloud_no_tc)
+	e_cdf, e_bin_edges = get_cdf(edge_no_tc)
+	s_cdf, s_bin_edges = get_cdf(split_no_tc)
+	v_cdf, v_bin_edges = get_cdf(via_edge_no_tc)
 
 # And finally plot the cdf
 fig = plt.figure()
