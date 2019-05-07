@@ -2,16 +2,13 @@ package org.apache.storm.starter;
 
 import io.latent.storm.rabbitmq.*;
 import io.latent.storm.rabbitmq.config.*;
-import org.apache.storm.Config;
-import org.apache.storm.LocalCluster;
-import org.apache.storm.StormSubmitter;
 import org.apache.storm.generated.StormTopology;
 import org.apache.storm.spout.Scheme;
 import org.apache.storm.topology.IRichSpout;
 import org.apache.storm.topology.TopologyBuilder;
 import org.apache.storm.tuple.Tuple;
 
-public class ClapDetectionTopologyAllOnOne {
+class ClapDetectionTopologyAllOnOne {
 
     private static String rabbitmqExchange = "sf.topic";
     private static String rabbitmqHost = "localhost";
@@ -70,12 +67,10 @@ public class ClapDetectionTopologyAllOnOne {
     }
 
     // debug = false does not use a vhost.
-    public static StormTopology CreateClapDetectionTopologyAllOnOne(boolean cloud, String token, boolean debug, boolean sink_is_cloud) {
+    static StormTopology CreateClapDetectionTopologyAllOnOne(boolean cloud, String token, boolean debug, boolean sink_is_cloud) {
         TopologyBuilder builder = new TopologyBuilder();
-        String suffix = "info";
-
         /* Begin RabbitMQ as Sensor Input */
-        if (!debug) suffix = "sensor-spout";
+        String suffix = "sensor-spout";
         IRichSpout sensorSpout = createRabbitSpout(cloud, token, suffix); // Receiving sensor data, always edge.
         ConsumerConfig sensorSpoutConfig = createRabbitSpoutConfig(cloud, debug); // Receiving sensor data, always edge.
         builder.setSpout("sensor-spout", sensorSpout, 1)
@@ -135,8 +130,7 @@ public class ClapDetectionTopologyAllOnOne {
         };
 
         // Rabbit Sink as Application Output
-        if (!debug) suffix = "sink2";
-        else suffix = "info";
+        suffix = "sink2";
 
         ProducerConfig sink2Config = createRabbitSinkConfig(cloud, token, suffix, debug, sink_is_cloud);
 

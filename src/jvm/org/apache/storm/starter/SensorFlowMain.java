@@ -65,7 +65,6 @@ public class SensorFlowMain {
         } else {
             final SensorFlowClient client = new SensorFlowClient(host, port, debug);
             client.start();
-            client.blockUntilShutdown();
         }
     }
 

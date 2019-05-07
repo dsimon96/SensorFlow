@@ -5,7 +5,6 @@ import org.apache.storm.starter.proto.StatusReply;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -35,9 +34,17 @@ class ExecutionManager {
         }
     }
 
+    private String getNewToken() {
+        if (debug) {
+            return "debug";
+        } else {
+            return "myapp"; //UUID.randomUUID().toString();
+        }
+    }
+
     String newJob() {
         log.info("Creating new job");
-        String token = UUID.randomUUID().toString();
+        String token = getNewToken();
         addJob(token);
         return token;
     }

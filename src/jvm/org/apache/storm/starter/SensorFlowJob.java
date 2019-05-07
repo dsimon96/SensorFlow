@@ -38,7 +38,7 @@ class SensorFlowJob {
         Config conf = new Config();
         conf.setDebug(debug);
 
-        StormTopology topology = ClapDetectionTopology.CreateClapDetectionTopology(isCloud, token, debug);
+        StormTopology topology = ClapDetectionTopologyAllOnOne.CreateClapDetectionTopologyAllOnOne(isCloud, token, debug, isCloud);
 
         cluster.submitTopology(token, conf, topology);
     }

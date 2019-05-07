@@ -2,11 +2,8 @@ package org.apache.storm.starter;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import org.apache.storm.starter.proto.DeletionReply;
 import org.apache.storm.starter.proto.Empty;
-import org.apache.storm.starter.proto.JobToken;
 import org.apache.storm.starter.proto.SensorFlowCloudGrpc;
-import org.apache.storm.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,14 +31,6 @@ class SensorFlowClient {
         String token = stub.submitJob(Empty.newBuilder().build()).getToken();
         log.info("Client got token {}", token);
         manager.addJob(token);
-
-        Utils.sleep(30000);
-
-        manager.deleteJob(token);
-        DeletionReply reply = stub.deleteJob(JobToken.newBuilder().setToken(token).build());
-        if (reply.getSuccess()) {
-            log.info("Successfully deleted job");
-        }
     }
 
     public void shutdown() throws InterruptedException {
