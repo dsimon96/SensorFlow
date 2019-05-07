@@ -43,20 +43,24 @@ class ClapDetectionTopologyAllOnOne {
 
         builder.setBolt("clap1", new ClapDetectionTopology.ClapDetection1Bolt(), 1).shuffleGrouping("spout1");
 
+        builder.setBolt("splitter1", new ClapDetectionTopology.SplitterBolt(), 1).shuffleGrouping("clap1");
+
         // Midbolt Sink and Spout
         TupleToMessage sink1Scheme = new TupleToMessageNonDynamic() {
             @Override
             public byte[] extractBody(Tuple input) {
-                String volAvgStr = Float.toString(input.getFloatByField("vol_avg"));
-                String currVolStr = Float.toString(input.getFloatByField("curr_vol"));
-                return (volAvgStr + ";" + currVolStr).getBytes();
+                return input.getStringByField("detection").getBytes();
             }
         };
-        ProducerConfig sink1Config = ClapDetectionTopology.CreateRabbitSinkConfig(cloud, token, "sink1", debug, sink_is_cloud);
+        ProducerConfig sink1CloudConfig = ClapDetectionTopology.CreateRabbitSinkConfig(cloud, token, "sink1", debug, true);
+        ProducerConfig sink1EdgeConfig = ClapDetectionTopology.CreateRabbitSinkConfig(cloud, token, "sink1", debug, false);
 
-        builder.setBolt("sink1", new RabbitMQBolt(sink1Scheme))
-                .addConfigurations(sink1Config.asMap())
-                .shuffleGrouping("clap1");
+        builder.setBolt("sink1-cloud", new RabbitMQBolt(sink1Scheme))
+                .addConfigurations(sink1CloudConfig.asMap())
+                .shuffleGrouping("splitter1", "cloud-stream");
+        builder.setBolt("sink1-edge", new RabbitMQBolt(sink1Scheme))
+                .addConfigurations(sink1EdgeConfig.asMap())
+                .shuffleGrouping("splitter1", "edge-stream");
 
         IRichSpout spout2 = ClapDetectionTopology.CreateRabbitSpout(cloud, token, "sink1");
         ConsumerConfig spout2Config = ClapDetectionTopology.CreateRabbitSpoutConfig(cloud, debug);
@@ -65,6 +69,8 @@ class ClapDetectionTopologyAllOnOne {
                 .setMaxSpoutPending(200);
 
         builder.setBolt("clap2", new ClapDetectionTopology.ClapDetection2Bolt(), 1).shuffleGrouping("spout2");
+
+        builder.setBolt("splitter2", new ClapDetectionTopology.SplitterBolt(), 1).shuffleGrouping("clap2");
 
         // RabbitMQ as Sink, message attributes are non-dynamic
         TupleToMessage sink2Scheme = new TupleToMessageNonDynamic() {
@@ -75,11 +81,15 @@ class ClapDetectionTopologyAllOnOne {
         // Rabbit Sink as Application Output
         suffix = "sink2";
 
-        ProducerConfig sink2Config = ClapDetectionTopology.CreateRabbitSinkConfig(cloud, token, suffix, debug, sink_is_cloud);
+        ProducerConfig sink2CloudConfig = ClapDetectionTopology.CreateRabbitSinkConfig(cloud, token, suffix, debug, true);
+        ProducerConfig sink2EdgeConfig = ClapDetectionTopology.CreateRabbitSinkConfig(cloud, token, suffix, debug, false);
 
-        builder.setBolt("sink2", new RabbitMQBolt(sink2Scheme))
-                .addConfigurations(sink2Config.asMap())
-                .shuffleGrouping("clap2");
+        builder.setBolt("sink2-cloud", new RabbitMQBolt(sink2Scheme))
+                .addConfigurations(sink2CloudConfig.asMap())
+                .shuffleGrouping("splitter2", "cloud-stream");
+        builder.setBolt("sink2-edge", new RabbitMQBolt(sink2Scheme))
+                .addConfigurations(sink2EdgeConfig.asMap())
+                .shuffleGrouping("splitter2", "edge-stream");
 
         return builder.createTopology();
     }
