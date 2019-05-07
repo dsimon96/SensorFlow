@@ -17,6 +17,9 @@ import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Tuple;
 import org.apache.storm.tuple.Values;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
@@ -24,9 +27,6 @@ import java.util.Queue;
 public class ClapDetectionTopology {
 
     private static String rabbitmqExchange = "sf.topic";
-    private static String rabbitmqSpoutRoutingKey = "edge.info";
-    private static String rabbitmqMidboltRoutingKey = "midbolt.info";
-    private static String rabbitmqSinkRoutingKey = "cloud.info";
     private static String rabbitmqHost = "localhost";
     private static int rabbitmqPort = 5672;
     private static String rabbitmqUsername = "sf-admin";
@@ -60,7 +60,9 @@ public class ClapDetectionTopology {
 
                 float volumeAverage = volumeTotal / pastVolumesQueue.size();
                 System.out.println("from clap1, emitting " + volumeAverage + " and " + volume);
-                _collector.emit(new Values(volumeAverage, volume));
+
+                String output = Float.toString(volumeAverage) + ";" + Float.toString(volume);
+                _collector.emit(new Values(output));
                 _collector.ack(tuple);
             }
             catch (Exception e) {
@@ -71,7 +73,7 @@ public class ClapDetectionTopology {
 
         @Override
         public void declareOutputFields(OutputFieldsDeclarer declarer) {
-            declarer.declare(new Fields("vol_avg", "curr_vol")); // Declares the output fields for the component
+            declarer.declare(new Fields("detection")); // Declares the output fields for the component
         }
     }
 
@@ -88,8 +90,6 @@ public class ClapDetectionTopology {
         @Override
         public void execute(Tuple tuple) {
             try {
-                //float volumeAverage = tuple.getFloat(0).floatValue();
-                //float currentVolume = tuple.getFloat(1).floatValue();
                 String midboltMsg = tuple.getString(0);
                 String[] splitMsg = midboltMsg.split(";", 2);
                 float volumeAverage = Float.parseFloat(splitMsg[0]);
@@ -118,6 +118,70 @@ public class ClapDetectionTopology {
         }
     }
 
+    public static class SplitterBolt extends BaseRichBolt {
+        OutputCollector _collector;
+
+        int item_count = 0;
+        int item_check_interval = 10;
+        boolean choose_random = false;
+        boolean destination_cloud = false;
+        String boltId;
+
+        @Override
+        public void prepare(Map conf, TopologyContext context, OutputCollector collector) {
+            _collector = collector;
+            boltId = context.getThisComponentId();
+        }
+
+        @Override
+        public void execute(Tuple tuple) {
+            try {
+                if (item_count % item_check_interval == 0) {
+                    File file = new File("src/" + boltId + ".txt");
+
+                    BufferedReader br = new BufferedReader(new FileReader(file));
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        System.out.println("SPLITTER: line from file="+line);
+                        if (line.contains("edge")) destination_cloud = false;
+                        else if (line.contains("cloud")) destination_cloud = true;
+                        if (line.contains("random")) choose_random = true;
+                    }
+                }
+                item_count++;
+
+                if (choose_random) {
+                    if (Math.random() < .5) {
+                        destination_cloud = false;
+                    } else {
+                        destination_cloud = true;
+                    }
+                }
+
+                System.out.print("at " + boltId + ", sending to ");
+                if (destination_cloud) {
+                    System.out.println("cloud");
+                    _collector.emit("cloud-stream", tuple, new Values(tuple.getValue(0)));
+                } else {
+                    System.out.println("edge");
+                    _collector.emit("edge-stream", tuple, new Values(tuple.getValue(0)));
+                }
+                _collector.ack(tuple);
+            }
+            catch (Exception e) {
+                System.out.println("No input for SplitterBolt");
+                System.out.println(e.toString());
+            }
+        }
+
+        @Override
+        public void declareOutputFields(OutputFieldsDeclarer declarer) {
+            declarer.declareStream("cloud-stream", new Fields("detection"));
+            declarer.declareStream("edge-stream", new Fields("detection"));
+            declarer.declare(new Fields("detection")); // Declares the output fields for the component
+        }
+    }
+
     public static IRichSpout CreateRabbitSpout(boolean cloud, String token, String suffix) {
         String routingKey = CreateRoutingKey(cloud, token, suffix);
 
@@ -142,11 +206,12 @@ public class ClapDetectionTopology {
                 .build();
     }
 
-    public static ProducerConfig CreateRabbitSinkConfig(boolean cloud, String token, String suffix, boolean debug) {
-        String Vhost;
+    public static ProducerConfig CreateRabbitSinkConfig(boolean cloud, String token, String suffix, boolean debug, boolean sink_is_cloud) {
+        String Vhost;  String routingKey;
         if (cloud) Vhost = rabbitmqCloudVhost;
         else Vhost = rabbitmqEdgeVhost;
-        String routingKey = CreateRoutingKey(cloud, token, suffix);
+        if (sink_is_cloud) routingKey = CreateRoutingKey(true, token, suffix);
+        else routingKey = CreateRoutingKey(false, token, suffix);
 
         ConnectionConfig sinkConnectionConfig;
         if (debug) sinkConnectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqPort, rabbitmqUsername, rabbitmqPassword, Vhost, 10);
@@ -169,6 +234,7 @@ public class ClapDetectionTopology {
     public static StormTopology CreateClapDetectionTopology(boolean cloud, String token, boolean debug) {
         TopologyBuilder builder = new TopologyBuilder();
         String suffix = "info";
+        boolean SINK_IS_CLOUD = cloud;
 
         /* Begin RabbitMQ as Sensor Input */
         if (!debug) suffix = "sensor-spout";
@@ -186,7 +252,7 @@ public class ClapDetectionTopology {
                 return input.getString(0).getBytes();
             }
         };
-        ProducerConfig sensorSinkConfig = CreateRabbitSinkConfig(cloud, token, "sensor-sink", debug);
+        ProducerConfig sensorSinkConfig = CreateRabbitSinkConfig(cloud, token, "sensor-sink", debug, SINK_IS_CLOUD);
         builder.setBolt("sensor-sink", new RabbitMQBolt(sensorSinkScheme))
                 .addConfigurations(sensorSinkConfig.asMap())
                 .shuffleGrouping("sensor-spout");
@@ -210,7 +276,7 @@ public class ClapDetectionTopology {
                 return (volAvgStr + ";" + currVolStr).getBytes();
             }
         };
-        ProducerConfig sink1Config = CreateRabbitSinkConfig(cloud, token, "sink1", debug);
+        ProducerConfig sink1Config = CreateRabbitSinkConfig(cloud, token, "sink1", debug, SINK_IS_CLOUD);
 
         builder.setBolt("sink1", new RabbitMQBolt(sink1Scheme))
                 .addConfigurations(sink1Config.asMap())
@@ -236,7 +302,7 @@ public class ClapDetectionTopology {
             suffix = "info";
             cloud = true; // Output to cloud for testing.
         }
-        ProducerConfig sink2Config = CreateRabbitSinkConfig(cloud, token, suffix, debug);
+        ProducerConfig sink2Config = CreateRabbitSinkConfig(cloud, token, suffix, debug, SINK_IS_CLOUD);
 
         builder.setBolt("sink2", new RabbitMQBolt(sink2Scheme))
                 .addConfigurations(sink2Config.asMap())
