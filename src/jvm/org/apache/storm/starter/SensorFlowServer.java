@@ -40,6 +40,9 @@ class SensorFlowServer {
 
     private void stop() {
         log.info("Requesting server shutdown...");
+        if (service != null) {
+            service.shutdown();
+        }
         if (server != null) {
             server.shutdown();
             log.info("Server has shut down.");
@@ -49,9 +52,6 @@ class SensorFlowServer {
     void blockUntilShutdown() throws InterruptedException {
         if (server != null) {
             server.awaitTermination();
-        }
-        if (service != null) {
-            service.shutdown();
         }
     }
 }
