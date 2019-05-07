@@ -142,11 +142,12 @@ public class ClapDetectionTopology {
                 .build();
     }
 
-    public static ProducerConfig CreateRabbitSinkConfig(boolean cloud, String token, String suffix, boolean debug) {
-        String Vhost;
+    public static ProducerConfig CreateRabbitSinkConfig(boolean cloud, String token, String suffix, boolean debug, boolean sink_is_cloud) {
+        String Vhost;  String routingKey;
         if (cloud) Vhost = rabbitmqCloudVhost;
         else Vhost = rabbitmqEdgeVhost;
-        String routingKey = CreateRoutingKey(cloud, token, suffix);
+        if (sink_is_cloud) routingKey = CreateRoutingKey(true, token, suffix);
+        else routingKey = CreateRoutingKey(false, token, suffix);
 
         ConnectionConfig sinkConnectionConfig;
         if (debug) sinkConnectionConfig = new ConnectionConfig(rabbitmqHost, rabbitmqPort, rabbitmqUsername, rabbitmqPassword, Vhost, 10);
@@ -169,6 +170,7 @@ public class ClapDetectionTopology {
     public static StormTopology CreateClapDetectionTopology(boolean cloud, String token, boolean debug) {
         TopologyBuilder builder = new TopologyBuilder();
         String suffix = "info";
+        boolean SINK_IS_CLOUD = cloud;
 
         /* Begin RabbitMQ as Sensor Input */
         if (!debug) suffix = "sensor-spout";
@@ -186,7 +188,7 @@ public class ClapDetectionTopology {
                 return input.getString(0).getBytes();
             }
         };
-        ProducerConfig sensorSinkConfig = CreateRabbitSinkConfig(cloud, token, "sensor-sink", debug);
+        ProducerConfig sensorSinkConfig = CreateRabbitSinkConfig(cloud, token, "sensor-sink", debug, SINK_IS_CLOUD);
         builder.setBolt("sensor-sink", new RabbitMQBolt(sensorSinkScheme))
                 .addConfigurations(sensorSinkConfig.asMap())
                 .shuffleGrouping("sensor-spout");
@@ -210,7 +212,7 @@ public class ClapDetectionTopology {
                 return (volAvgStr + ";" + currVolStr).getBytes();
             }
         };
-        ProducerConfig sink1Config = CreateRabbitSinkConfig(cloud, token, "sink1", debug);
+        ProducerConfig sink1Config = CreateRabbitSinkConfig(cloud, token, "sink1", debug, SINK_IS_CLOUD);
 
         builder.setBolt("sink1", new RabbitMQBolt(sink1Scheme))
                 .addConfigurations(sink1Config.asMap())
@@ -236,7 +238,7 @@ public class ClapDetectionTopology {
             suffix = "info";
             cloud = true; // Output to cloud for testing.
         }
-        ProducerConfig sink2Config = CreateRabbitSinkConfig(cloud, token, suffix, debug);
+        ProducerConfig sink2Config = CreateRabbitSinkConfig(cloud, token, suffix, debug, SINK_IS_CLOUD);
 
         builder.setBolt("sink2", new RabbitMQBolt(sink2Scheme))
                 .addConfigurations(sink2Config.asMap())
