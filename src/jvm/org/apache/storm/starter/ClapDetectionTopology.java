@@ -163,6 +163,7 @@ public class ClapDetectionTopology {
                         if (line.contains("edge")) destination_cloud = false;
                         else if (line.contains("cloud")) destination_cloud = true;
                         if (line.contains("random")) choose_random = true;
+                        else choose_random = false;
                     }
                 }
                 item_count++;
