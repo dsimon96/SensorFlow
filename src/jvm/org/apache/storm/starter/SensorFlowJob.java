@@ -8,9 +8,6 @@ import org.apache.storm.starter.sfgraph.LogicalGraph;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-
 class SensorFlowJob {
     private final static Logger log = LoggerFactory.getLogger(SensorFlowJob.class);
     private final String token;
@@ -30,17 +27,6 @@ class SensorFlowJob {
         this.cluster = cluster;
         this.latencyMs = latencyMs;
         this.bandwidthKbps = bandwidthKbps;
-    }
-
-    public static void WriteToSplitterFile(String splitterBoltId, String content) {
-        try {
-            BufferedWriter writer = new BufferedWriter(new FileWriter("src/" + splitterBoltId + ".txt"));
-            writer.write(content);
-            writer.close();
-        }
-        catch (Exception e) {
-            System.out.println("Error when writing to file: " + e.toString());
-        }
     }
 
     void start() {
