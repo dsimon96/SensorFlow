@@ -1,6 +1,8 @@
 package org.apache.storm.starter.sfgraph;
 
 import org.apache.storm.starter.SensorFlowBenchmark;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
@@ -8,6 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class LogicalGraph {
+    private final static Logger log = LoggerFactory.getLogger(LogicalGraph.class);
     final SensorSource source;
     final ActuationSink sink;
     Map<String, String> bolts = new HashMap<>(); // Map data bolt to splitter bolt.
@@ -17,7 +20,13 @@ public class LogicalGraph {
         sink = t;
     }
 
-    void writeToSplitterFile(Map<String, Boolean> schedule) {
+    public boolean setSchedule(Map<String, Boolean> schedule) {
+        for (String dataBoltId : schedule.keySet()) {
+            if (!bolts.containsKey(dataBoltId)) {
+                log.error("Bolt {} not found in graph", dataBoltId);
+                return false;
+            }
+        }
         for (String dataBoltId : schedule.keySet()) {
             String splitterBoltId = bolts.get(dataBoltId);
             Boolean cloud = schedule.get(dataBoltId);
@@ -28,8 +37,10 @@ public class LogicalGraph {
                 writer.close();
             } catch (Exception e) {
                 System.out.println("Error when writing to file: " + e.toString());
+                return false;
             }
         }
+        return true;
     }
 
     Map<String, Boolean> getOptSchedule(Map<String, Double> remoteCosts) {
