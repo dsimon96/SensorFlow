@@ -1,8 +1,13 @@
 package org.apache.storm.starter;
 
-import io.latent.storm.rabbitmq.*;
-import io.latent.storm.rabbitmq.config.*;
+import io.latent.storm.rabbitmq.RabbitMQBolt;
+import io.latent.storm.rabbitmq.TupleToMessage;
+import io.latent.storm.rabbitmq.TupleToMessageNonDynamic;
+import io.latent.storm.rabbitmq.config.ConsumerConfig;
+import io.latent.storm.rabbitmq.config.ProducerConfig;
 import org.apache.storm.generated.StormTopology;
+import org.apache.storm.starter.sfgraph.LogicalGraph;
+import org.apache.storm.starter.sfgraph.LogicalGraphBuilder;
 import org.apache.storm.topology.IRichSpout;
 import org.apache.storm.topology.TopologyBuilder;
 import org.apache.storm.tuple.Tuple;
@@ -93,5 +98,13 @@ class ClapDetectionTopologyAllOnOne {
                 .shuffleGrouping("clap2");
 
         return builder.createTopology();
+    }
+
+    static LogicalGraph CreateLogicalGraph(String token, boolean isCloud, double latencyMs, double bandwidthKbps) {
+        return new LogicalGraphBuilder(0, latencyMs, bandwidthKbps)
+                .setDataSize(3.0)
+                .addBolt("clap1", "sensor-splitter")
+                .addBolt("clap2", "splitter1")
+                .build();
     }
 }

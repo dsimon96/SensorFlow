@@ -9,8 +9,8 @@ public class SensorFlowCloudImpl extends SensorFlowCloudGrpc.SensorFlowCloudImpl
     private final static Logger log = LoggerFactory.getLogger(SensorFlowCloudImpl.class);
     private final ExecutionManager manager;
 
-    SensorFlowCloudImpl(boolean debug) {
-        manager = new ExecutionManager(true, debug);
+    SensorFlowCloudImpl(boolean debug, double latencyMs, double bandwidthKbps) {
+        manager = new ExecutionManager(true, debug, latencyMs, bandwidthKbps);
     }
 
     @Override

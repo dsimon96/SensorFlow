@@ -9,16 +9,18 @@ import java.io.IOException;
 
 class SensorFlowServer {
     private final static Logger log = LoggerFactory.getLogger(SensorFlowServer.class);
-    private boolean debug;
-    private String edgeHost;
-    private int port;
+    private final boolean debug;
+    private final int port;
     private Server server;
     private SensorFlowCloudImpl service;
+    private final double latencyMs;
+    private final double bandwidthKbps;
 
-    SensorFlowServer(String edgeHost, int port, boolean debug) {
+    SensorFlowServer(int port, boolean debug, double latencyMs, double bandwidthKbps) {
         this.debug = debug;
-        this.edgeHost = edgeHost;
         this.port = port;
+        this.latencyMs = latencyMs;
+        this.bandwidthKbps = bandwidthKbps;
     }
 
     void start() throws IOException {
@@ -31,7 +33,7 @@ class SensorFlowServer {
         });
 
         log.info("Listening on port {}", port);
-        service = new SensorFlowCloudImpl(debug);
+        service = new SensorFlowCloudImpl(debug, latencyMs, bandwidthKbps);
         server = ServerBuilder.forPort(port)
                 .addService(service)
                 .build()

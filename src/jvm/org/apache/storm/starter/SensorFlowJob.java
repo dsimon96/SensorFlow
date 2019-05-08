@@ -4,6 +4,7 @@ import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
 import org.apache.storm.generated.StormTopology;
 import org.apache.storm.starter.proto.StatusReply;
+import org.apache.storm.starter.sfgraph.LogicalGraph;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,12 +19,17 @@ class SensorFlowJob {
     private final LocalCluster cluster;
     private boolean isInitialized = false;
     private boolean isRunning = false;
+    private final double latencyMs;
+    private final double bandwidthKbps;
+    private LogicalGraph graph;
 
-    SensorFlowJob(boolean isCloud, boolean debug, String token, LocalCluster cluster) {
+    SensorFlowJob(boolean isCloud, boolean debug, String token, LocalCluster cluster, double latencyMs, double bandwidthKbps) {
         this.isCloud = isCloud;
         this.debug = debug;
         this.token = token;
         this.cluster = cluster;
+        this.latencyMs = latencyMs;
+        this.bandwidthKbps = bandwidthKbps;
     }
 
     public static void WriteToSplitterFile(String splitterBoltId, String content) {
@@ -52,7 +58,9 @@ class SensorFlowJob {
         Config conf = new Config();
         conf.setDebug(debug);
 
-        StormTopology topology = ClapDetectionTopologyAllOnOne.CreateClapDetectionTopologyAllOnOne(isCloud, token, debug, isCloud);
+        graph = ClapDetectionTopologyAllOnOne.CreateLogicalGraph(token, isCloud, latencyMs, bandwidthKbps);
+
+        StormTopology topology = ClapDetectionTopologyAllOnOne.CreateClapDetectionTopologyAllOnOne(isCloud, token, debug, false);
 
         cluster.submitTopology(token, conf, topology);
     }

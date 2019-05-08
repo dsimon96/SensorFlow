@@ -14,10 +14,14 @@ class ExecutionManager {
     private final ConcurrentMap<String, SensorFlowJob> jobs = new ConcurrentHashMap<>();
     private final boolean isCloud;
     private final boolean debug;
+    private final double latencyMs;
+    private final double bandwidthKbps;
 
-    ExecutionManager(boolean isCloud, boolean debug) {
+    ExecutionManager(boolean isCloud, boolean debug, double latencyMs, double bandwidthKbps) {
         this.isCloud = isCloud;
         this.debug = debug;
+        this.latencyMs = latencyMs;
+        this.bandwidthKbps = bandwidthKbps;
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
@@ -51,7 +55,7 @@ class ExecutionManager {
 
     void addJob(String token) {
         log.info("Adding new job with token {}", token);
-        SensorFlowJob job = new SensorFlowJob(isCloud, debug, token, cluster);
+        SensorFlowJob job = new SensorFlowJob(isCloud, debug, token, cluster, latencyMs, bandwidthKbps);
         jobs.put(token, job);
         job.start();
     }

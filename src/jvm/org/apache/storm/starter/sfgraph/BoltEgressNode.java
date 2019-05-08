@@ -6,14 +6,14 @@ public class BoltEgressNode implements SFNode {
     private final double localLatencyMs;
     private final double wanLatencyMs;
     private final double wanThroughputKbps;
-    private final boolean isRemote;
+    private final boolean isCloud;
     private SFNode edgeNext;
     private SFNode cloudNext;
     private double sizeMultiplier = 1.0;
     private double sizeAdded = 0.0;
 
-    BoltEgressNode(boolean isRemote, double localLatencyMs, double wanLatencyMs, double wanThroughputKbps) {
-        this.isRemote = isRemote;
+    BoltEgressNode(boolean isCloud, double localLatencyMs, double wanLatencyMs, double wanThroughputKbps) {
+        this.isCloud = isCloud;
         this.localLatencyMs = localLatencyMs;
         this.wanLatencyMs = wanLatencyMs;
         this.wanThroughputKbps = wanThroughputKbps;
@@ -28,7 +28,7 @@ public class BoltEgressNode implements SFNode {
 
         double edgeLatency;
         double cloudLatency;
-        if (isRemote) {
+        if (isCloud) {
             edgeLatency = wanLatencyMs + (outputSize / wanThroughputKbps) + edgePath.getLatency();
             cloudLatency = localLatencyMs + cloudPath.getLatency();
         } else {

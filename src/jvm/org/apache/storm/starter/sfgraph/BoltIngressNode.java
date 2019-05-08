@@ -6,20 +6,20 @@ import java.util.Map;
 
 public class BoltIngressNode implements SFNode {
     private BoltEgressNode next;
-    private boolean isRemote;
+    private boolean isCloud;
     private String name;
     private double sizeMultiplier = 1.0;
     private double sizeAdded = 0.0;
 
-    BoltIngressNode(boolean isRemote, String name) {
-        this.isRemote = isRemote;
+    BoltIngressNode(boolean isCloud, String name) {
+        this.isCloud = isCloud;
         this.name = name;
     }
 
     @Override
     public BestPath getBestPath(Map<String, Double> remoteCosts, double inputSize) {
         double compLatency;
-        if (isRemote) {
+        if (isCloud) {
             compLatency = remoteCosts.get(name);
         } else {
             compLatency = SensorFlowBenchmark.get(name);
@@ -77,6 +77,6 @@ public class BoltIngressNode implements SFNode {
 
     @Override
     public Boolean isCloud() {
-        return isRemote;
+        return isCloud;
     }
 }

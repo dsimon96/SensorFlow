@@ -5,8 +5,8 @@ public class LogicalGraphBuilder {
     private final double wanLatencyMs;
     private final double wanBandwidthKbps;
     private LogicalGraph graph;
-    private SFNode cursorRemote;
-    private SFNode cursorLocal;
+    private SFNode cursorEdge;
+    private SFNode cursorCloud;
 
     public LogicalGraphBuilder(double localLatencyMs, double wanLatencyMs, double wanBandwidthKbps) {
         this.localLatencyMs = localLatencyMs;
@@ -16,12 +16,12 @@ public class LogicalGraphBuilder {
         graph = new LogicalGraph(new SensorSource(localLatencyMs, wanLatencyMs, wanBandwidthKbps),
                 new ActuationSink());
 
-        cursorLocal = graph.source;
-        cursorRemote = graph.source;
+        cursorCloud = graph.source;
+        cursorEdge = graph.source;
     }
 
-    public LogicalGraphBuilder addBolt(String name) {
-        graph.boltNames.add(name);
+    public LogicalGraphBuilder addBolt(String name, String splitter) {
+        graph.bolts.put(name, splitter);
 
         BoltIngressNode localIngress = new BoltIngressNode(false, name);
         BoltEgressNode localEgress = new BoltEgressNode(false, localLatencyMs, wanLatencyMs, wanBandwidthKbps);
@@ -31,42 +31,48 @@ public class LogicalGraphBuilder {
         BoltEgressNode remoteEgress = new BoltEgressNode(true, localLatencyMs, wanLatencyMs, wanBandwidthKbps);
         remoteIngress.setNext(remoteEgress);
 
-        cursorLocal.setEdgeNext(localIngress);
-        cursorLocal.setCloudNext(remoteEgress);
+        cursorCloud.setEdgeNext(localIngress);
+        cursorCloud.setCloudNext(remoteEgress);
 
-        if (cursorRemote != cursorLocal) {
-            cursorRemote.setEdgeNext(localIngress);
-            cursorRemote.setCloudNext(remoteIngress);
+        if (cursorEdge != cursorCloud) {
+            cursorEdge.setEdgeNext(localIngress);
+            cursorEdge.setCloudNext(remoteIngress);
         }
 
-        cursorLocal = localEgress;
-        cursorRemote = remoteEgress;
+        cursorCloud = localEgress;
+        cursorEdge = remoteEgress;
 
         return this;
     }
 
-    public void setDataSize(double size) {
-        cursorLocal.setDataSize(size);
-        cursorRemote.setDataSize(size);
+    public LogicalGraphBuilder setDataSize(double size) {
+        cursorCloud.setDataSize(size);
+        cursorEdge.setDataSize(size);
+
+        return this;
     }
 
-    public void multiplyDataSize(double multiplier) {
-        cursorLocal.multiplyDataSize(multiplier);
-        if (cursorRemote != cursorLocal) {
-            cursorRemote.multiplyDataSize(multiplier);
+    public LogicalGraphBuilder multiplyDataSize(double multiplier) {
+        cursorCloud.multiplyDataSize(multiplier);
+        if (cursorEdge != cursorCloud) {
+            cursorEdge.multiplyDataSize(multiplier);
         }
+
+        return this;
     }
 
-    public void addToDataSize(double size) {
-        cursorLocal.addToDataSize(size);
-        if (cursorRemote != cursorLocal) {
-            cursorRemote.addToDataSize(size);
+    public LogicalGraphBuilder addToDataSize(double size) {
+        cursorCloud.addToDataSize(size);
+        if (cursorEdge != cursorCloud) {
+            cursorEdge.addToDataSize(size);
         }
+
+        return this;
     }
 
     public LogicalGraph build() {
-        cursorLocal.setNext(graph.sink);
-        cursorRemote.setNext(graph.sink);
+        cursorCloud.setNext(graph.sink);
+        cursorEdge.setNext(graph.sink);
         return graph;
     }
 }

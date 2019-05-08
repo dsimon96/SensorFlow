@@ -1,14 +1,14 @@
 package org.apache.storm.starter.sfgraph;
 
+import org.apache.storm.starter.SensorFlowBenchmark;
+
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 
 public class LogicalGraph {
     final SensorSource source;
     final ActuationSink sink;
-    Set<String> boltNames = new HashSet<>();
+    Map<String, String> bolts = new HashMap<>();
 
     LogicalGraph(SensorSource s, ActuationSink t) {
         source = s;
@@ -17,7 +17,7 @@ public class LogicalGraph {
 
     Map<String, Boolean> getOptSchedule(Map<String, Double> remoteCosts) {
         Map<String, Boolean> res = new HashMap<>();
-        for (String name : boltNames) {
+        for (String name : bolts.keySet()) {
             res.put(name, false);
         }
 
@@ -29,6 +29,16 @@ public class LogicalGraph {
                 Boolean isCloud = node.isCloud();
                 res.put(boltName, isCloud);
             }
+        }
+
+        return res;
+    }
+
+    Map<String, Double> getNodeLatencies() {
+        Map<String, Double> res = new HashMap<>();
+
+        for (String name : bolts.keySet()) {
+            res.put(name, SensorFlowBenchmark.get(name));
         }
 
         return res;

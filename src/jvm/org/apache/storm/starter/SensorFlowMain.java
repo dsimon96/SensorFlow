@@ -15,12 +15,22 @@ public class SensorFlowMain {
     private static final Option HOST_OPT = Option.builder("host")
             .hasArg(true)
             .type(String.class)
-            .desc("Hostname for the other paired device")
+            .desc("Hostname for the cloud server")
             .build();
     private static final Option PORT_OPT = Option.builder("port")
             .hasArg(true)
             .type(Number.class)
-            .desc("If in cloud mode, port to bind")
+            .desc("Port number for the cloud server")
+            .build();
+    private static final Option LATENCY_OPT = Option.builder("latency")
+            .hasArg(true)
+            .type(Number.class)
+            .desc("Latency in milliseconds between edge and cloud")
+            .build();
+    private static final Option BANDWIDTH_OPT = Option.builder("bandwidth")
+            .hasArg(true)
+            .type(Number.class)
+            .desc("Bandwidth in kilobits per second between edge and cloud")
             .build();
 
     private static final Options CLI_OPTIONS = new Options()
@@ -28,15 +38,20 @@ public class SensorFlowMain {
             .addOption(CLOUD_OPT)
             .addOption(DEBUG_OPT)
             .addOption(PORT_OPT)
-            .addOption(HOST_OPT);
+            .addOption(HOST_OPT)
+            .addOption(LATENCY_OPT)
+            .addOption(BANDWIDTH_OPT);
+
 
     public static void main(String[] args) {
         CommandLineParser parser = new DefaultParser();
 
         boolean isServer;
-        String host;
+        String host = "";
         int port;
         boolean debug;
+        double latencyMs;
+        double bandwidthKbps;
         try {
             CommandLine cmd = parser.parse(CLI_OPTIONS, args);
             if (!validateArgs(cmd)) {
@@ -47,15 +62,20 @@ public class SensorFlowMain {
 
             isServer = cmd.hasOption("cloud");
             port = ((Number) cmd.getParsedOptionValue("port")).intValue();
-            host = (String)cmd.getParsedOptionValue("host");
+            if (!isServer) {
+                host = (String) cmd.getParsedOptionValue("host");
+            }
             debug = cmd.hasOption("debug");
+
+            latencyMs = ((Number) cmd.getParsedOptionValue("latency")).doubleValue();
+            bandwidthKbps = ((Number) cmd.getParsedOptionValue("bandwidth")).doubleValue();
         } catch (ParseException e) {
             System.out.println("Failed to parse command line args!");
             return;
         }
 
         if (isServer) {
-            final SensorFlowServer server = new SensorFlowServer(host, port, debug);
+            final SensorFlowServer server = new SensorFlowServer(port, debug, latencyMs, bandwidthKbps);
             try {
                 server.start();
                 server.blockUntilShutdown();
@@ -63,7 +83,7 @@ public class SensorFlowMain {
                 e.printStackTrace();
             }
         } else {
-            final SensorFlowClient client = new SensorFlowClient(host, port, debug);
+            final SensorFlowClient client = new SensorFlowClient(host, port, debug, latencyMs, bandwidthKbps);
             client.start();
         }
     }
@@ -74,13 +94,23 @@ public class SensorFlowMain {
             return false;
         }
 
-        if (!cmd.hasOption("host")) {
-            System.out.println("Error: Please specify the hostname for the paired device.");
+        if (cmd.hasOption("edge") && !cmd.hasOption("host")) {
+            System.out.println("Error: Please specify the hostname for the cloud server.");
             return false;
         }
 
         if (!cmd.hasOption("port")) {
             System.out.println("Error: Please specify the port for the cloud server.");
+            return false;
+        }
+
+        if (!cmd.hasOption("latency")) {
+            System.out.println("Error: Please specify the latency between cloud and edge.");
+            return false;
+        }
+
+        if (!cmd.hasOption("bandwidth")) {
+            System.out.println("Error: Please specify the bandwidth between cloud and edge.");
             return false;
         }
 
