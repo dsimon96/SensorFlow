@@ -169,6 +169,7 @@ public class ClapDetectionTopology {
                 item_count++;
 
                 if (choose_random) {
+                    System.out.println("choosing randomly...");
                     if (Math.random() < .5) {
                         destination_cloud = false;
                     } else {
