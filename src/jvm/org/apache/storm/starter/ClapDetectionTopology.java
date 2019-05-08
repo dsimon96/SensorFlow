@@ -16,10 +16,11 @@ import org.apache.storm.topology.base.BaseRichBolt;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Tuple;
 import org.apache.storm.tuple.Values;
+import org.apache.storm.utils.Utils;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
+import java.io.*;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
@@ -37,6 +38,7 @@ public class ClapDetectionTopology {
     // Calculates the average volume in the recent past, and passes on the current volume.
     public static class ClapDetection1Bolt extends BaseRichBolt {
         OutputCollector _collector;
+        String boltId;
 
         int maxQueueSize = 10;
         float volumeTotal = (float) 0.0;
@@ -45,10 +47,13 @@ public class ClapDetectionTopology {
         @Override
         public void prepare(Map conf, TopologyContext context, OutputCollector collector) {
             _collector = collector;
+            boltId = context.getThisComponentId();
         }
 
         @Override
         public void execute(Tuple tuple) {
+            Instant startTs = Instant.now();
+            Utils.sleep(100);
             try {
                 float volume = Float.parseFloat(tuple.getString(0));
                 pastVolumesQueue.add(new Float(volume));
@@ -62,6 +67,9 @@ public class ClapDetectionTopology {
                 System.out.println("from clap1, emitting " + volumeAverage + " and " + volume);
 
                 String output = Float.toString(volumeAverage) + ";" + Float.toString(volume);
+                Instant endTs = Instant.now();
+                Duration duration = Duration.between(startTs, endTs);
+                WriteTimestampToFile(boltId, duration.toMillis());
                 _collector.emit(new Values(output));
                 _collector.ack(tuple);
             }
@@ -79,16 +87,20 @@ public class ClapDetectionTopology {
 
     public static class ClapDetection2Bolt extends BaseRichBolt {
         OutputCollector _collector;
+        String boltId;
 
         float thresholdDifference = (float) 3.0;
 
         @Override
         public void prepare(Map conf, TopologyContext context, OutputCollector collector) {
+            boltId = context.getThisComponentId();
             _collector = collector;
         }
 
         @Override
         public void execute(Tuple tuple) {
+            Instant startTs = Instant.now();
+            Utils.sleep(100);
             try {
                 String midboltMsg = tuple.getString(0);
                 String[] splitMsg = midboltMsg.split(";", 2);
@@ -99,11 +111,16 @@ public class ClapDetectionTopology {
 
                 float currentDifference = currentVolume - volumeAverage;
 
+                Instant endTs;
                 if (currentDifference > thresholdDifference) { // Determine if there was a clap.
+                    endTs = Instant.now();
                     _collector.emit(new Values("clap detected!"));
                 } else {
+                    endTs = Instant.now();
                     _collector.emit(new Values("nothing"));
                 }
+                Duration duration = Duration.between(startTs, endTs);
+                WriteTimestampToFile(boltId, duration.toMillis());
                 _collector.ack(tuple);
             }
             catch (Exception e) {
@@ -228,6 +245,18 @@ public class ClapDetectionTopology {
     public static String CreateRoutingKey(boolean cloud, String token, String suffix) {
         if (cloud) return "cloud." + token + "." + suffix;
         return "edge." + token + "." + suffix;
+    }
+
+    // Gets ts in nanoseconds, writes as milliseconds.
+    public static void WriteTimestampToFile(String dataBoltId, long ts) {
+        try {
+            BufferedWriter writer = new BufferedWriter(new FileWriter("src/latency-" + dataBoltId + ".txt", true));
+            writer.write(Long.toString(ts));
+            writer.newLine();
+            writer.close();
+        } catch (Exception e) {
+            System.out.println("Error when writing to file: " + e.toString());
+        }
     }
 
     // debug = false does not use a vhost.
