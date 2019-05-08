@@ -6,6 +6,7 @@ import org.apache.storm.starter.proto.DeletionReply;
 import org.apache.storm.starter.proto.Empty;
 import org.apache.storm.starter.proto.JobToken;
 import org.apache.storm.starter.proto.SensorFlowCloudGrpc;
+import org.apache.storm.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +41,11 @@ class SensorFlowClient {
         token = stub.submitJob(Empty.newBuilder().build()).getToken();
         log.info("Client got token {}", token);
         manager.addJob(token);
+
+        while (true) {
+            Utils.sleep(20000);
+            manager.rescheduleAll(stub);
+        }
     }
 
     public void shutdown() {

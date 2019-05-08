@@ -8,6 +8,8 @@ import org.apache.storm.starter.sfgraph.LogicalGraph;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Map;
+
 class SensorFlowJob {
     private final static Logger log = LoggerFactory.getLogger(SensorFlowJob.class);
     private final String token;
@@ -71,5 +73,9 @@ class SensorFlowJob {
         } else {
             return StatusReply.Status.Done;
         }
+    }
+
+    boolean setSchedule(Map<String, Boolean> schedule) {
+        return graph.setSchedule(schedule);
     }
 }

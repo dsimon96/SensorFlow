@@ -1,12 +1,18 @@
 package org.apache.storm.starter;
 
 import org.apache.storm.LocalCluster;
+import org.apache.storm.starter.proto.JobSchedule;
+import org.apache.storm.starter.proto.ScheduleReply;
+import org.apache.storm.starter.proto.SensorFlowCloudGrpc;
 import org.apache.storm.starter.proto.StatusReply;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 class ExecutionManager {
     private final static Logger log = LoggerFactory.getLogger(ExecutionManager.class);
@@ -76,6 +82,36 @@ class ExecutionManager {
             return StatusReply.Status.DoesNotExist;
         } else {
             return job.getStatus();
+        }
+    }
+
+    void rescheduleAll(SensorFlowCloudGrpc.SensorFlowCloudBlockingStub stub) {
+        for (SensorFlowJob job : jobs.values()) {
+            String token = job.getToken();
+
+            Map<String, Boolean> sched = new HashMap<>();
+            sched.put("clap1", ThreadLocalRandom.current().nextBoolean());
+            sched.put("clap2", ThreadLocalRandom.current().nextBoolean());
+
+            ScheduleReply reply = stub.setJobSchedule(JobSchedule.newBuilder()
+                    .setToken(token)
+                    .putAllSchedule(sched)
+                    .build());
+
+            if (reply.getSuccess() && setJobSchedule(token, sched)) {
+                log.info("Successfully set schedule for job {}.", token);
+            } else {
+                log.info("Failed to reschedule job {}.", token);
+            }
+        }
+    }
+
+    boolean setJobSchedule(String token, Map<String, Boolean> scheduleMap) {
+        SensorFlowJob job = jobs.get(token);
+        if (job != null) {
+            return job.setSchedule(scheduleMap);
+        } else {
+            return false;
         }
     }
 }

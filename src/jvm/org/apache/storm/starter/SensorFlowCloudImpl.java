@@ -48,7 +48,17 @@ public class SensorFlowCloudImpl extends SensorFlowCloudGrpc.SensorFlowCloudImpl
 
     @Override
     public void setJobSchedule(JobSchedule request, StreamObserver<ScheduleReply> responseObserver) {
-        super.setJobSchedule(request, responseObserver);
+        String token = request.getToken();
+        log.info("SetJobSchedule({}, ...)", token);
+
+        boolean success = manager.setJobSchedule(token, request.getScheduleMap());
+
+        ScheduleReply reply = ScheduleReply.newBuilder()
+                .setSuccess(success)
+                .build();
+
+        responseObserver.onNext(reply);
+        responseObserver.onCompleted();
     }
 
     void shutdown() {
