@@ -24,9 +24,17 @@ public class BoltEgressNode implements SFNode {
         double outputSize = getOutputSize(inputSize);
 
         BestPath edgePath = edgeNext.getBestPath(remoteCosts, outputSize);
-        BestPath cloudPath = cloudNext.getBestPath(remoteCosts, outputSize);
-
         double edgeLatency;
+        if (cloudNext == null) {
+            if (isCloud) {
+                edgeLatency = wanLatencyMs + (outputSize / wanThroughputKbps) + edgePath.getLatency();
+            } else {
+                edgeLatency = localLatencyMs + edgePath.getLatency();
+            }
+            return new BestPath(edgeLatency, this, edgePath);
+        }
+
+        BestPath cloudPath = cloudNext.getBestPath(remoteCosts, outputSize);
         double cloudLatency;
         if (isCloud) {
             edgeLatency = wanLatencyMs + (outputSize / wanThroughputKbps) + edgePath.getLatency();

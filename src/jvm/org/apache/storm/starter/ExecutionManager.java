@@ -1,18 +1,13 @@
 package org.apache.storm.starter;
 
 import org.apache.storm.LocalCluster;
-import org.apache.storm.starter.proto.JobSchedule;
-import org.apache.storm.starter.proto.ScheduleReply;
-import org.apache.storm.starter.proto.SensorFlowCloudGrpc;
-import org.apache.storm.starter.proto.StatusReply;
+import org.apache.storm.starter.proto.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ThreadLocalRandom;
 
 class ExecutionManager {
     private final static Logger log = LoggerFactory.getLogger(ExecutionManager.class);
@@ -64,6 +59,7 @@ class ExecutionManager {
         SensorFlowJob job = new SensorFlowJob(isCloud, debug, token, cluster, latencyMs, bandwidthKbps);
         jobs.put(token, job);
         job.start();
+        job.resetSchedule();
     }
 
     boolean deleteJob(String token) {
@@ -89,16 +85,13 @@ class ExecutionManager {
         for (SensorFlowJob job : jobs.values()) {
             String token = job.getToken();
 
-            Map<String, Boolean> sched = new HashMap<>();
-            sched.put("clap1", ThreadLocalRandom.current().nextBoolean());
-            sched.put("clap2", ThreadLocalRandom.current().nextBoolean());
+            LatencyReply latencyReply = stub.getJobLatencies(JobToken.newBuilder().setToken(token).build());
 
-            ScheduleReply reply = stub.setJobSchedule(JobSchedule.newBuilder()
-                    .setToken(token)
-                    .putAllSchedule(sched)
-                    .build());
+            Map<String, Boolean> sched = job.getOptSchedule(latencyReply.getLatenciesMap());
 
-            if (reply.getSuccess() && setJobSchedule(token, sched)) {
+            JobSchedule req = JobSchedule.newBuilder().setToken(token).putAllSchedule(sched).build();
+            ScheduleReply scheduleReply = stub.setJobSchedule(req);
+            if (scheduleReply.getSuccess() && setJobSchedule(token, sched)) {
                 log.info("Successfully set schedule for job {}.", token);
             } else {
                 log.info("Failed to reschedule job {}.", token);
@@ -112,6 +105,15 @@ class ExecutionManager {
             return job.setSchedule(scheduleMap);
         } else {
             return false;
+        }
+    }
+
+    Map<String, Double> getJobLatencies(String token) {
+        SensorFlowJob job = jobs.get(token);
+        if (job != null) {
+            return job.getJobLatencies();
+        } else {
+            return null;
         }
     }
 }

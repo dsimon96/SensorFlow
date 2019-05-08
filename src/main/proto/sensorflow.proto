@@ -12,6 +12,8 @@ service SensorFlowCloud {
     rpc GetJobStatus (JobToken) returns (StatusReply) {};
     rpc DeleteJob (JobToken) returns (DeletionReply) {};
     rpc SetJobSchedule (JobSchedule) returns (ScheduleReply) {};
+    rpc GetJobLatencies (JobToken) returns (LatencyReply) {
+    };
 }
 
 message Empty {}
@@ -42,4 +44,8 @@ message JobSchedule {
 
 message ScheduleReply {
     bool success = 1;
+}
+
+message LatencyReply {
+    map<string, double> latencies = 1;
 }

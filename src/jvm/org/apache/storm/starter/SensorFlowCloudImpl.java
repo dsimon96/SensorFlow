@@ -61,6 +61,19 @@ public class SensorFlowCloudImpl extends SensorFlowCloudGrpc.SensorFlowCloudImpl
         responseObserver.onCompleted();
     }
 
+    @Override
+    public void getJobLatencies(JobToken request, StreamObserver<LatencyReply> responseObserver) {
+        String token = request.getToken();
+        log.info("GetJobLatencies({})", token);
+
+        LatencyReply reply = LatencyReply.newBuilder()
+                .putAllLatencies(manager.getJobLatencies(token))
+                .build();
+
+        responseObserver.onNext(reply);
+        responseObserver.onCompleted();
+    }
+
     void shutdown() {
         manager.shutdown();
     }

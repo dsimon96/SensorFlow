@@ -78,4 +78,16 @@ class SensorFlowJob {
     boolean setSchedule(Map<String, Boolean> schedule) {
         return graph.setSchedule(schedule);
     }
+
+    boolean resetSchedule() {
+        return graph.resetSchedule();
+    }
+
+    Map<String, Boolean> getOptSchedule(Map<String, Double> remoteCosts) {
+        return graph.getOptSchedule(remoteCosts);
+    }
+
+    Map<String, Double> getJobLatencies() {
+        return graph.getBoltLatencies();
+    }
 }

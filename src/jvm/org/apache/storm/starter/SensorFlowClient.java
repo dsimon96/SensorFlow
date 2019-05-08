@@ -42,9 +42,10 @@ class SensorFlowClient {
         log.info("Client got token {}", token);
         manager.addJob(token);
 
+        Utils.sleep(60000);
         while (true) {
-            Utils.sleep(20000);
             manager.rescheduleAll(stub);
+            Utils.sleep(20000);
         }
     }
 

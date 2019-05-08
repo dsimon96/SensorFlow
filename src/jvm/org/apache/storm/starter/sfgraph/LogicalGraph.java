@@ -32,7 +32,11 @@ public class LogicalGraph {
             Boolean cloud = schedule.get(dataBoltId);
             try {
                 BufferedWriter writer = new BufferedWriter(new FileWriter("src/" + splitterBoltId + ".txt"));
-                if (cloud) { writer.write("cloud"); }
+                if (cloud == null) {
+                    writer.write("random");
+                } else if (cloud) {
+                    writer.write("cloud");
+                }
                 else { writer.write("edge"); }
                 writer.close();
             } catch (Exception e) {
@@ -43,7 +47,7 @@ public class LogicalGraph {
         return true;
     }
 
-    Map<String, Boolean> getOptSchedule(Map<String, Double> remoteCosts) {
+    public Map<String, Boolean> getOptSchedule(Map<String, Double> remoteCosts) {
         Map<String, Boolean> res = new HashMap<>();
         for (String name : bolts.keySet()) {
             res.put(name, false);
@@ -70,5 +74,22 @@ public class LogicalGraph {
         }
 
         return res;
+    }
+
+    public boolean resetSchedule() {
+        Map<String, Boolean> sched = new HashMap<>();
+        for (String bolt : bolts.keySet()) {
+            sched.put(bolt, null);
+        }
+
+        return setSchedule(sched);
+    }
+
+    public Map<String, Double> getBoltLatencies() {
+        Map<String, Double> latencies = new HashMap<>();
+        for (String bolt : bolts.keySet()) {
+            latencies.put(bolt, SensorFlowBenchmark.get(bolt));
+        }
+        return latencies;
     }
 }
